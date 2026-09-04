@@ -21,10 +21,17 @@ public final class GameSession: ObservableObject {
     }
 
     public nonisolated static func defaultAI() -> any AIProvider {
+        #if targetEnvironment(simulator)
+        // The Simulator does not reliably provide the device's on-device model runtime.
+        return FakeAIProvider()
+        #else
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, *) { return FoundationModelsAIProvider() }
+        if #available(iOS 26.0, *) {
+            return FallbackAIProvider(primary: FoundationModelsAIProvider(), fallback: FakeAIProvider())
+        }
         #endif
         return FakeAIProvider()
+        #endif
     }
 
     public func startNewCampaign() {

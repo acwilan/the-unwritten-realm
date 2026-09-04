@@ -43,6 +43,32 @@ public protocol AIProvider: Sendable {
 
 public enum AIProviderError: Error { case unavailable, malformedResponse }
 
+/// Keeps the turn playable when the preferred on-device model is unavailable.
+public struct FallbackAIProvider: AIProvider {
+    private let primary: any AIProvider
+    private let fallback: any AIProvider
+
+    public init(primary: any AIProvider, fallback: any AIProvider) {
+        self.primary = primary
+        self.fallback = fallback
+    }
+
+    public func interpret(command: PlayerCommand, context: DMContext) async throws -> InterpretedAction {
+        do { return try await primary.interpret(command: command, context: context) }
+        catch { return try await fallback.interpret(command: command, context: context) }
+    }
+
+    public func narrate(context: NarrationContext) async throws -> String {
+        do { return try await primary.narrate(context: context) }
+        catch { return try await fallback.narrate(context: context) }
+    }
+
+    public func extractMemories(context: NarrationContext) async throws -> [MemoryCandidate] {
+        do { return try await primary.extractMemories(context: context) }
+        catch { return try await fallback.extractMemories(context: context) }
+    }
+}
+
 public struct FakeAIProvider: AIProvider {
     public init() {}
 

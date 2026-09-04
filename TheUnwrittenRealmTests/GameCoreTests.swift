@@ -54,7 +54,15 @@ final class GameCoreTests: XCTestCase {
     func testSaveRoundTrip() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let store = JSONCampaignStore(url: directory.appendingPathComponent("campaign.json"))
-        let original = StarterCampaign.make()
+        var original = StarterCampaign.make()
+        original.recentTurns[0] = ConversationEntry(
+            id: original.recentTurns[0].id,
+            speaker: original.recentTurns[0].speaker,
+            speakerName: original.recentTurns[0].speakerName,
+            text: original.recentTurns[0].text,
+            eventSummaries: original.recentTurns[0].eventSummaries,
+            date: Date(timeIntervalSinceReferenceDate: 123456.789123)
+        )
         try store.save(original)
         XCTAssertEqual(try store.load(), original)
         try store.delete()
@@ -72,5 +80,18 @@ final class GameCoreTests: XCTestCase {
         XCTAssertFalse(result.events.isEmpty)
         XCTAssertEqual(state.turnNumber, 1)
         XCTAssertTrue(state.recentTurns.last?.text.contains("world") == true)
+    }
+
+    func testProviderFallsBackWhenPrimaryIsUnavailable() async throws {
+        struct UnavailableProvider: AIProvider {
+            func interpret(command: PlayerCommand, context: DMContext) async throws -> InterpretedAction { throw AIProviderError.unavailable }
+            func narrate(context: NarrationContext) async throws -> String { throw AIProviderError.unavailable }
+            func extractMemories(context: NarrationContext) async throws -> [MemoryCandidate] { throw AIProviderError.unavailable }
+        }
+        let campaign = StarterCampaign.make()
+        let context = ContextBuilder().build(for: campaign)
+        let provider = FallbackAIProvider(primary: UnavailableProvider(), fallback: FakeAIProvider())
+        let action = try await provider.interpret(command: PlayerCommand(rawText: "look around"), context: context)
+        XCTAssertEqual(action.intent, .investigate)
     }
 }

@@ -40,7 +40,13 @@ private extension JSONEncoder {
     static var campaign: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
+        // Preserve the full precision of Date. JSONEncoder's built-in ISO-8601
+        // strategy can omit fractional seconds, which breaks an Equatable
+        // save/load round trip for dates created with Date().
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(date.timeIntervalSinceReferenceDate)
+        }
         return encoder
     }
 }
@@ -48,7 +54,32 @@ private extension JSONEncoder {
 private extension JSONDecoder {
     static var campaign: JSONDecoder {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+
+            if let timeInterval = try? container.decode(Double.self) {
+                return Date(timeIntervalSinceReferenceDate: timeInterval)
+            }
+
+            // Keep loading saves written by the previous ISO-8601 format.
+            let value = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: value) {
+                return date
+            }
+
+            let legacyFormatter = ISO8601DateFormatter()
+            legacyFormatter.formatOptions = [.withInternetDateTime]
+            if let date = legacyFormatter.date(from: value) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid campaign date: \(value)"
+            )
+        }
         return decoder
     }
 }
