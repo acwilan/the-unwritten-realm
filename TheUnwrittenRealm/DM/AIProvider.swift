@@ -75,7 +75,10 @@ public struct FakeAIProvider: AIProvider {
     public func interpret(command: PlayerCommand, context: DMContext) async throws -> InterpretedAction {
         let text = command.rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = text.lowercased()
-        let target = context.nearbyNPCs.first { lower.contains($0.name.lowercased()) }
+        let target = context.nearbyNPCs.first { npc in
+            let name = npc.name.lowercased()
+            return lower.contains(name) || name.split(separator: " ").contains { lower.contains($0) }
+        }
         let destination = context.location.exits.first { exit in
             context.location.name.lowercased().contains(exit) || lower.contains(exit.replacingOccurrences(of: "_", with: " "))
         }
@@ -84,7 +87,7 @@ public struct FakeAIProvider: AIProvider {
         else if lower.contains("go ") || lower.contains("travel") || lower.contains("head ") || lower.contains("walk") { intent = .travel }
         else if lower.contains("attack") || lower.contains("hit") || lower.contains("fight") || lower.contains("throw a punch") { intent = .attack }
         else if lower.contains("lie") || lower.contains("claim") || lower.contains("pretend") || lower.contains("tell") && lower.contains("sent") { intent = .deceive }
-        else if lower.contains("convince") || lower.contains("persuade") || lower.contains("ask") || lower.contains("tell") { intent = .persuade }
+        else if lower.contains("convince") || lower.contains("persuade") || lower.contains("ask") || lower.contains("tell") || lower.contains("what do you know") { intent = .persuade }
         else if lower.contains("look") || lower.contains("inspect") || lower.contains("search") || lower.contains("examine") { intent = .investigate }
         else if lower.contains("rest") || lower.contains("wait") { intent = .rest }
         else if lower.contains("help") || lower.contains("save") { intent = .help }
@@ -104,7 +107,8 @@ public struct FakeAIProvider: AIProvider {
         if !context.resolution.isValid { return "You try it, but the facts of the world get in the way: \(context.resolution.explanation)" }
         if let check = context.resolution.check {
             let result = check.outcome == .success || check.outcome == .criticalSuccess ? "It works." : "It does not go as planned."
-            return "At \(location), you attempt to \(context.action.approach.lowercased()). The moment hangs on a \(check.attribute.rawValue) check (\(check.label)). \(result) \(context.resolution.explanation)"
+            let article = ["a", "e", "i", "o", "u"].contains(check.attribute.rawValue.first ?? "a") ? "an" : "a"
+            return "At \(location), you attempt to \(context.action.approach.lowercased()). The moment hangs on \(article) \(check.attribute.rawValue) check (\(check.label)). \(result) \(context.resolution.explanation)"
         }
         return "At \(location), \(context.resolution.explanation)"
     }

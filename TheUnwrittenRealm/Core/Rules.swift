@@ -101,15 +101,52 @@ public struct RulesEngine: Sendable {
         let outcome: CheckOutcome = roll == 1 ? .criticalFailure : roll == 20 ? .criticalSuccess : total >= difficulty ? .success : .failure
         let check = SkillCheck(attribute: attribute, roll: roll, modifier: modifier, difficulty: difficulty, total: total, outcome: outcome)
         var events = [GameEvent(kind: .skillCheckResolved, value: total, text: "\(attribute.rawValue.capitalized) check: \(check.label) — \(outcome.rawValue).")]
+        var explanation = check.outcome == .success || check.outcome == .criticalSuccess ? "The attempt works." : "The attempt falls short."
         switch (action.intent, outcome) {
         case (.attack, .success), (.attack, .criticalSuccess): events.append(GameEvent(kind: .characterDamaged, value: outcome == .criticalSuccess ? 1 : 2, text: "The danger bites back."))
-        case (.deceive, .success), (.deceive, .criticalSuccess), (.persuade, .success), (.persuade, .criticalSuccess), (.social, .success), (.social, .criticalSuccess):
-            if let target { events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: "\(target.name) seems more receptive.")) }
+            explanation = "Your attack lands, but the danger bites back."
+        case (.deceive, .success), (.deceive, .criticalSuccess):
+            if let target {
+                events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: "\(target.name) seems more receptive."))
+                explanation = "\(target.name) seems to believe you."
+            }
+        case (.persuade, .success), (.persuade, .criticalSuccess), (.social, .success), (.social, .criticalSuccess):
+            if let target {
+                events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: "\(target.name) seems more receptive."))
+                if let fact = target.knownFacts.first(where: { !state.discoveredFacts.contains($0) }) {
+                    events.append(GameEvent(kind: .factDiscovered, text: fact))
+                    explanation = "\(target.name) opens up: \(fact)"
+                } else {
+                    explanation = "\(target.name) seems more receptive."
+                }
+            }
+        case (.investigate, .success), (.investigate, .criticalSuccess), (.explore, .success), (.explore, .criticalSuccess):
+            if let clue = locationClue(for: state), !state.discoveredFacts.contains(clue) {
+                events.append(GameEvent(kind: .factDiscovered, text: clue))
+                explanation = "You uncover a clue: \(clue)"
+            } else {
+                explanation = "You find no new clue, but your understanding of the area sharpens."
+            }
         case (.help, .success), (.help, .criticalSuccess):
             events.append(GameEvent(kind: .factDiscovered, text: "The immediate problem has a workable weakness."))
+            explanation = "You identify a workable weakness in the immediate problem."
         default: break
         }
-        return ActionResolution(isValid: true, check: check, events: events, explanation: check.outcome == .success || check.outcome == .criticalSuccess ? "The attempt works." : "The attempt falls short.", targetNPCID: target?.id)
+        return ActionResolution(isValid: true, check: check, events: events, explanation: explanation, targetNPCID: target?.id)
+    }
+
+    private func locationClue(for state: CampaignState) -> String? {
+        switch state.currentLocationID {
+        case "tavern": return "Mira's map marks the Old Road as a route toward the Sunken Vault."
+        case "square": return "The watch post confirms that the Old Road leads toward the ruined chapel."
+        case "blacksmith": return "The chapel altar has a hidden mechanism."
+        case "old_road": return "The broken milestones point toward a chapel swallowed by ivy."
+        case "chapel": return "The empty reliquary bears the same crescent mark as the old silver coin."
+        case "forest_path": return "The forest path leads to a guarded rope bridge."
+        case "goblin_bridge": return "The ravine route can reach the Sunken Vault."
+        case "dungeon": return "The duke's seal is carved into the vault door."
+        default: return nil
+        }
     }
 
     private func findNPC(for action: InterpretedAction, in state: CampaignState) -> NPC? {
