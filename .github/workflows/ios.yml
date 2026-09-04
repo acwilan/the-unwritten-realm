@@ -1,0 +1,66 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+  PROJECT: TheUnwrittenRealm.xcodeproj
+  SCHEME: TheUnwrittenRealm
+
+jobs:
+  build:
+    name: Build app
+    runs-on: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build for iOS
+        run: >-
+          xcodebuild
+          -project "$PROJECT"
+          -scheme "$SCHEME"
+          -sdk iphoneos
+          -destination 'generic/platform=iOS'
+          -derivedDataPath "$RUNNER_TEMP/DerivedData"
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+  unit-tests:
+    name: Unit tests
+    runs-on: macos-26
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Select an available iOS Simulator
+        id: simulator
+        shell: bash
+        run: |
+          simulator_id="$(xcrun simctl list devices available -j | jq -r '
+            .devices
+            | to_entries[]
+            | select(.key | startswith("com.apple.CoreSimulator.SimRuntime.iOS-"))
+            | .value[]
+            | select(.isAvailable == true)
+            | .udid
+          ' | head -n 1)"
+          test -n "$simulator_id"
+          echo "id=$simulator_id" >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: >-
+          xcodebuild
+          -project "$PROJECT"
+          -scheme "$SCHEME"
+          -sdk iphonesimulator
+          -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.id }}"
+          -derivedDataPath "$RUNNER_TEMP/DerivedData"
+          CODE_SIGNING_ALLOWED=NO
+          test
