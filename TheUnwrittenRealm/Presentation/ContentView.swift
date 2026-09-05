@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var showingJournal = false
     @State private var showingNewCampaignConfirmation = false
     @FocusState private var inputIsFocused: Bool
+    @StateObject private var speech = SpeechService()
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -92,7 +93,7 @@ struct ContentView: View {
                             }
                         }
                         ForEach(campaign.recentTurns) { entry in
-                            MessageBubble(entry: entry)
+                            MessageBubble(entry: entry, speech: speech)
                         }
                         if session.isProcessing {
                             HStack { ProgressView(); Text("The Dungeon Master is thinking…").foregroundStyle(.secondary) }.padding()
@@ -134,16 +135,35 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .contentShape(Rectangle())
         .onTapGesture { inputIsFocused = false }
+        .onDisappear { speech.stop() }
     }
 }
 
 private struct MessageBubble: View {
     let entry: ConversationEntry
+    @ObservedObject var speech: SpeechService
+
     var body: some View {
         HStack {
             if entry.speaker == .player { Spacer(minLength: 35) }
             VStack(alignment: .leading, spacing: 5) {
-                Text(entry.speaker == .player ? "You" : (entry.speakerName ?? "Dungeon Master")).font(.caption.bold()).foregroundStyle(entry.speaker == .player ? .indigo : .secondary)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(entry.speaker == .player ? "You" : (entry.speakerName ?? "Dungeon Master"))
+                        .font(.caption.bold())
+                        .foregroundStyle(entry.speaker == .player ? .indigo : .secondary)
+                    Spacer(minLength: 8)
+                    if entry.speaker != .player {
+                        Button {
+                            speech.toggle(entry)
+                        } label: {
+                            Image(systemName: speech.isSpeaking(entry) ? "stop.fill" : "speaker.wave.2.fill")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(speech.isSpeaking(entry) ? "Stop speaking" : "Read aloud")
+                    }
+                }
                 Text(entry.text)
                 if !entry.eventSummaries.isEmpty { Text(entry.eventSummaries.joined(separator: "  ")).font(.caption2).foregroundStyle(.secondary) }
             }.padding(12).background(entry.speaker == .player ? Color.indigo.opacity(0.12) : Color.secondary.opacity(0.10)).clipShape(RoundedRectangle(cornerRadius: 14))
