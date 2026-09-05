@@ -8,47 +8,29 @@ struct ContentView: View {
     @FocusState private var inputIsFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color(.systemBackground).ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Color(.systemBackground).ignoresSafeArea()
 
-                Group {
-                    if let campaign = session.campaign {
-                        adventureView(campaign)
-                    } else {
-                        welcomeView
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-            .navigationTitle("The Unwritten Realm")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if session.campaign != nil {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button("Journal", systemImage: "book.closed") { showingJournal = true }
-                            Button("New Campaign", systemImage: "plus.circle", role: .destructive) { showingNewCampaignConfirmation = true }
-                        } label: { Image(systemName: "ellipsis.circle") }
-                    }
-                    ToolbarItemGroup(placement: .keyboard) {
-                        Spacer()
-                        Button("Done") { inputIsFocused = false }
-                    }
+            Group {
+                if let campaign = session.campaign {
+                    adventureView(campaign)
+                } else {
+                    welcomeView
                 }
             }
-            .sheet(isPresented: $showingJournal) {
-                if let campaign = session.campaign { JournalView(campaign: campaign) }
-            }
-            .confirmationDialog("Start a new campaign?", isPresented: $showingNewCampaignConfirmation) {
-                Button("Start New Campaign", role: .destructive) { session.startNewCampaign() }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text("Your current campaign will be replaced on this device.") }
-            .alert("Something went wrong", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
-                Button("OK") { session.errorMessage = nil }
-            } message: { Text(session.errorMessage ?? "") }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .sheet(isPresented: $showingJournal) {
+            if let campaign = session.campaign { JournalView(campaign: campaign) }
+        }
+        .confirmationDialog("Start a new campaign?", isPresented: $showingNewCampaignConfirmation) {
+            Button("Start New Campaign", role: .destructive) { session.startNewCampaign() }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Your current campaign will be replaced on this device.") }
+        .alert("Something went wrong", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
+            Button("OK") { session.errorMessage = nil }
+        } message: { Text(session.errorMessage ?? "") }
     }
 
     private var welcomeView: some View {
@@ -64,6 +46,41 @@ struct ContentView: View {
 
     private func adventureView(_ campaign: CampaignState) -> some View {
         VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Text("The Unwritten Realm")
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Menu {
+                    Button("Journal", systemImage: "book.closed") { showingJournal = true }
+                    Button("New Campaign", systemImage: "plus.circle", role: .destructive) { showingNewCampaignConfirmation = true }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title2)
+                }
+                .accessibilityLabel("Campaign menu")
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+
+            if case .unavailable(let reason) = session.foundationModelAvailability {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("On-device AI unavailable")
+                            .font(.caption.weight(.semibold))
+                        Text(reason)
+                            .font(.caption2)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.orange)
+                .padding(.horizontal)
+                .padding(.bottom, 6)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Apple Foundation Models unavailable. \(reason)")
+            }
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
@@ -88,20 +105,31 @@ struct ContentView: View {
                 .scrollDismissesKeyboard(.interactively)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if let check = session.lastCheck { Text("Last check · \(check.label)").font(.caption).foregroundStyle(.secondary).padding(.bottom, 5) }
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("What do you do?", text: $draft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...4)
-                    .focused($inputIsFocused)
-                Button {
-                    let value = draft
-                    draft = ""
-                    inputIsFocused = false
-                    session.submit(value)
-                } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
-                .disabled(session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }.padding()
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if let check = session.lastCheck {
+                    Text("Last check · \(check.label)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.bottom, 5)
+                }
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("What do you do?", text: $draft, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(1...4)
+                        .focused($inputIsFocused)
+                    Button {
+                        let value = draft
+                        draft = ""
+                        inputIsFocused = false
+                        session.submit(value)
+                    } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
+                    .disabled(session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .padding()
+            }
+            .background(.regularMaterial)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .contentShape(Rectangle())

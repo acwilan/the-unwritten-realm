@@ -1,5 +1,45 @@
 import Foundation
 
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+public enum FoundationModelAvailability: Equatable, Sendable {
+    case available
+    case unavailable(String)
+
+    public var isAvailable: Bool {
+        if case .available = self { return true }
+        return false
+    }
+}
+
+public enum FoundationModelStatus {
+    public static var current: FoundationModelAvailability {
+        #if targetEnvironment(simulator)
+        return .unavailable("The Simulator uses the deterministic fallback.")
+        #else
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return .available
+            case .unavailable(.appleIntelligenceNotEnabled):
+                return .unavailable("Enable Apple Intelligence in Settings.")
+            case .unavailable(.deviceNotEligible):
+                return .unavailable("This device does not support Apple Intelligence.")
+            case .unavailable(.modelNotReady):
+                return .unavailable("The on-device model is not ready yet.")
+            @unknown default:
+                return .unavailable("The on-device model is not ready.")
+            }
+        }
+        #endif
+        return .unavailable("Requires iOS 26 or later.")
+        #endif
+    }
+}
+
 public struct DMContext: Sendable {
     public let location: Location
     public let player: PlayerCharacter
@@ -122,8 +162,6 @@ public struct FakeAIProvider: AIProvider {
 }
 
 #if canImport(FoundationModels)
-import FoundationModels
-
 @available(iOS 26.0, macOS 26.0, *)
 public final class FoundationModelsAIProvider: AIProvider, @unchecked Sendable {
     private let session = LanguageModelSession()

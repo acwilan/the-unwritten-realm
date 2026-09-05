@@ -8,6 +8,7 @@ public final class GameSession: ObservableObject {
     @Published public var errorMessage: String?
     @Published public private(set) var lastCheck: SkillCheck?
     @Published public private(set) var lastDiagnostics: TurnDiagnostics?
+    @Published public private(set) var foundationModelAvailability: FoundationModelAvailability
 
     private let store: any CampaignStore
     private let ai: any AIProvider
@@ -17,6 +18,7 @@ public final class GameSession: ObservableObject {
         self.store = store
         self.ai = ai
         self.turnEngine = GameTurnEngine(ai: ai)
+        self.foundationModelAvailability = FoundationModelStatus.current
         self.campaign = try? store.load()
     }
 
