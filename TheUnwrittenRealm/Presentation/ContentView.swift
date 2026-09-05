@@ -5,17 +5,24 @@ struct ContentView: View {
     @State private var draft = ""
     @State private var showingJournal = false
     @State private var showingNewCampaignConfirmation = false
+    @FocusState private var inputIsFocused: Bool
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let campaign = session.campaign {
-                    adventureView(campaign)
-                } else {
-                    welcomeView
+            ZStack(alignment: .top) {
+                Color(.systemBackground).ignoresSafeArea()
+
+                Group {
+                    if let campaign = session.campaign {
+                        adventureView(campaign)
+                    } else {
+                        welcomeView
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .navigationTitle(session.campaign?.title ?? "The Unwritten Realm")
+            .navigationTitle("The Unwritten Realm")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if session.campaign != nil {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -23,6 +30,10 @@ struct ContentView: View {
                             Button("Journal", systemImage: "book.closed") { showingJournal = true }
                             Button("New Campaign", systemImage: "plus.circle", role: .destructive) { showingNewCampaignConfirmation = true }
                         } label: { Image(systemName: "ellipsis.circle") }
+                    }
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { inputIsFocused = false }
                     }
                 }
             }
@@ -37,6 +48,7 @@ struct ContentView: View {
                 Button("OK") { session.errorMessage = nil }
             } message: { Text(session.errorMessage ?? "") }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var welcomeView: some View {
@@ -73,13 +85,27 @@ struct ContentView: View {
                 .onChange(of: campaign.recentTurns.count) { _, _ in
                     if let last = campaign.recentTurns.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             if let check = session.lastCheck { Text("Last check · \(check.label)").font(.caption).foregroundStyle(.secondary).padding(.bottom, 5) }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("What do you do?", text: $draft, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...4)
-                Button { let value = draft; draft = ""; session.submit(value) } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }.disabled(session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                TextField("What do you do?", text: $draft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...4)
+                    .focused($inputIsFocused)
+                Button {
+                    let value = draft
+                    draft = ""
+                    inputIsFocused = false
+                    session.submit(value)
+                } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
+                .disabled(session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .contentShape(Rectangle())
+        .onTapGesture { inputIsFocused = false }
     }
 }
 
