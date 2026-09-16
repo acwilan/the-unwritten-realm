@@ -4,6 +4,7 @@ struct ContentView: View {
     @ObservedObject var session: GameSession
     @State private var draft = ""
     @State private var showingJournal = false
+    @State private var showingCoop = false
     @State private var showingNewCampaignConfirmation = false
     @FocusState private var inputIsFocused: Bool
     @StateObject private var speech = SpeechService()
@@ -25,6 +26,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingJournal) {
             if let campaign = session.campaign { JournalView(campaign: campaign) }
         }
+        .sheet(isPresented: $showingCoop) { CoopModeView() }
         .confirmationDialog("Start a new campaign?", isPresented: $showingNewCampaignConfirmation) {
             Button("Start New Campaign", role: .destructive) { session.startNewCampaign() }
             Button("Cancel", role: .cancel) {}
@@ -41,6 +43,7 @@ struct ContentView: View {
             Text("The Moon Beneath the Hill").font(.largeTitle.bold()).multilineTextAlignment(.center)
             Text("A living story where your words become the next move.").font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
             Button("Begin Adventure", systemImage: "play.fill") { session.startNewCampaign() }.buttonStyle(.borderedProminent)
+            Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }.buttonStyle(.bordered)
             Spacer()
         }.padding(28)
     }
@@ -54,6 +57,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
                 Menu {
                     Button("Journal", systemImage: "book.closed") { showingJournal = true }
+                    Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }
                     Button("New Campaign", systemImage: "plus.circle", role: .destructive) { showingNewCampaignConfirmation = true }
                 } label: {
                     Image(systemName: "ellipsis.circle")

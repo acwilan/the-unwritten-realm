@@ -132,4 +132,60 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(action.intent, .persuade)
         XCTAssertEqual(action.targetID, "mira")
     }
+
+    func testCoopHostAuthoritativelyRejectsStaleAndDuplicateCommands() async throws {
+        let initial = CoopStarterCampaign.make()
+        let runtime = HostGameRuntime(state: initial, dice: ScriptedCoopDice([20]))
+        let accepted = await runtime.receive(CoopPlayerIntentSubmission(campaignID: initial.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: 0, text: "inspect the bell"))
+        XCTAssertTrue(accepted.accepted)
+        XCTAssertFalse(accepted.events.isEmpty)
+
+        let duplicateID = UUID()
+        let nextRevision = accepted.projection.revision
+        let first = await runtime.receive(CoopPlayerIntentSubmission(commandID: duplicateID, campaignID: initial.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: nextRevision, text: "inspect the bell"))
+        let duplicate = await runtime.receive(CoopPlayerIntentSubmission(commandID: duplicateID, campaignID: initial.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: nextRevision, text: "inspect the bell"))
+        XCTAssertTrue(first.accepted)
+        XCTAssertTrue(duplicate.duplicate)
+        XCTAssertEqual(first.events, duplicate.events)
+
+        let stale = await runtime.receive(CoopPlayerIntentSubmission(campaignID: initial.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: 0, text: "inspect again"))
+        XCTAssertFalse(stale.accepted)
+        XCTAssertTrue(stale.reason?.contains("out of date") == true)
+    }
+
+    func testCoopProjectionFiltersPrivateAudienceAtSerializationBoundary() throws {
+        let initial = CoopStarterCampaign.make()
+        let otherPlayer = UUID()
+        let privateEvent = CommittedCoopEvent(sequence: 1, audience: .players([CoopStarterCampaign.hostPlayerID]), payload: .privateObservation(text: "Only the host can see this clue.", playerID: CoopStarterCampaign.hostPlayerID))
+        let hostProjection = CoopStateProjection(state: initial, playerID: CoopStarterCampaign.hostPlayerID, events: [privateEvent])
+        let otherProjection = CoopStateProjection(state: initial, playerID: otherPlayer, events: [privateEvent])
+        XCTAssertEqual(hostProjection.visibleEvents.count, 1)
+        XCTAssertTrue(otherProjection.visibleEvents.isEmpty)
+        let encoded = try JSONEncoder().encode(otherProjection)
+        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains("Only the host can see this clue."))
+    }
+
+    func testCoopJournalReplaysCommittedEvents() throws {
+        let initial = CoopStarterCampaign.make()
+        let event = CommittedCoopEvent(sequence: 1, payload: .worldFactDiscovered(fact: "The bell is bound to the shrine."))
+        let replayed = try CoopReplay.apply([event], to: initial)
+        XCTAssertEqual(replayed.revision, 1)
+        XCTAssertTrue(replayed.world.facts.contains("The bell is bound to the shrine."))
+    }
+
+    func testCoopCharacterClaimIsExplicitAndSingleOwner() async throws {
+        let initial = CoopStarterCampaign.make()
+        let runtime = HostGameRuntime(state: initial)
+        let playerID = (try await runtime.registerPlayer(displayName: "Rin", peerID: "rin-device")).id
+        _ = try await runtime.approve(playerID: playerID, peerID: "rin-device")
+        _ = try await runtime.claimCharacter(playerID: playerID, characterID: CoopStarterCampaign.companionCharacterID)
+        let snapshot = await runtime.snapshot()
+        XCTAssertEqual(snapshot.party.characters[CoopStarterCampaign.companionCharacterID]?.ownerID, playerID)
+        do {
+            _ = try await runtime.claimCharacter(playerID: CoopStarterCampaign.hostPlayerID, characterID: CoopStarterCampaign.companionCharacterID)
+            XCTFail("A claimed character must not be claimable by another player.")
+        } catch {
+            XCTAssertTrue(error is CoopRuntimeError)
+        }
+    }
 }
