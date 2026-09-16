@@ -60,3 +60,14 @@ The same menu lets you start a new campaign. Starting a new campaign replaces th
 The app saves the campaign after starting it and after each completed turn. The on-device Apple Foundation Models provider is used when available. On the Simulator, unsupported devices, and during tests, the app uses a deterministic fallback so the adventure remains playable.
 
 For build instructions, tests, project structure, and development conventions, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Publish to TestFlight
+
+The **Publish iOS to TestFlight** GitHub Actions workflow archives the app for a physical iOS device and uploads the IPA to App Store Connect. It never runs tests or starts a simulator. Run it manually from the Actions tab, or push a tag matching `v*`.
+
+Configure these GitHub Actions values before running it:
+
+- Variables: `APPSTORE_ISSUER_ID` and `APPSTORE_API_KEY_ID`.
+- Secrets: `APPSTORE_API_PRIVATE_KEY`, `APPSTORE_CERTIFICATES_FILE_BASE64`, and `APPSTORE_CERTIFICATES_PASSWORD`.
+
+The certificate secret must contain an Apple Distribution `.p12` encoded with base64. The App Store Connect API key should have permission to upload builds, and the provisioning profile must be an App Store profile for `com.acwilan.TheUnwrittenRealm` named `AppStore com.acwilan.TheUnwrittenRealm`.
