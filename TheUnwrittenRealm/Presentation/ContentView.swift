@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.appLanguage) private var language
     @State private var draft = ""
     @State private var showingJournal = false
+    @State private var showingCampaignDescription = false
     @State private var showingCoop = false
     @State private var showingNewCampaignConfirmation = false
     @State private var showingCharacterCreation = false
@@ -29,6 +30,9 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showingJournal) {
             if let campaign = session.campaign { JournalView(campaign: campaign) }
+        }
+        .sheet(isPresented: $showingCampaignDescription) {
+            CampaignDescriptionView()
         }
         .sheet(isPresented: $showingCoop) { CoopModeView() }
         .fullScreenCover(isPresented: $showingCharacterCreation, onDismiss: {
@@ -77,6 +81,7 @@ struct ContentView: View {
                 Spacer(minLength: 0)
                 Menu {
                     Button("Journal", systemImage: "book.closed") { showingJournal = true }
+                    Button("Campaign Description", systemImage: "text.book.closed") { showingCampaignDescription = true }
                     Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }
                     Button("New Campaign", systemImage: "plus.circle", role: .destructive) { showingNewCampaignConfirmation = true }
                 } label: {
@@ -342,9 +347,7 @@ private struct CampaignIntroView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    IntroSection(icon: "globe.americas.fill", title: "The setting", text: "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden.")
-
-                    IntroSection(icon: "book.closed.fill", title: "The story so far", text: "In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill. Mira Vale believes the vault holds the last trace of her missing brother. Others are searching too—and the trail is already going cold.")
+                    CampaignDescriptionSections()
 
                     VStack(alignment: .leading, spacing: 10) {
                         Label("Your place in it", systemImage: campaign.player.characterType.icon)
@@ -398,6 +401,36 @@ private struct CampaignIntroView: View {
             }
             .navigationTitle("Before You Begin")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct CampaignDescriptionView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                CampaignDescriptionSections()
+                    .padding(24)
+            }
+            .navigationTitle("Campaign Description")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct CampaignDescriptionSections: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            IntroSection(icon: "globe.americas.fill", title: "The setting", text: "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden.")
+
+            IntroSection(icon: "book.closed.fill", title: "The story so far", text: "In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill. Mira Vale believes the vault holds the last trace of her missing brother. Others are searching too—and the trail is already going cold.")
         }
     }
 }
