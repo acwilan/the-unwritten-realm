@@ -36,8 +36,8 @@ public final class GameSession: ObservableObject {
         #endif
     }
 
-    public func startNewCampaign() {
-        campaign = StarterCampaign.make()
+    public func startNewCampaign(profile: CharacterCreationProfile = .default) {
+        campaign = StarterCampaign.make(profile: profile)
         do { try store.save(campaign!) } catch { errorMessage = "Could not save the new campaign." }
     }
 

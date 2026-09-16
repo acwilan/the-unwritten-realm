@@ -17,6 +17,94 @@ public enum Attribute: String, Codable, CaseIterable, Sendable {
     case presence
 }
 
+public enum CharacterType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case vanguard
+    case shadow
+    case lorekeeper
+    case envoy
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .vanguard: return "Vanguard"
+        case .shadow: return "Shadow"
+        case .lorekeeper: return "Lorekeeper"
+        case .envoy: return "Envoy"
+        }
+    }
+
+    public var icon: String {
+        switch self {
+        case .vanguard: return "shield.lefthalf.filled"
+        case .shadow: return "eye.slash.fill"
+        case .lorekeeper: return "book.closed.fill"
+        case .envoy: return "bubble.left.and.bubble.right.fill"
+        }
+    }
+
+    public var summary: String {
+        switch self {
+        case .vanguard: return "A steadfast frontliner who meets danger head-on."
+        case .shadow: return "A nimble observer who finds the quiet way through."
+        case .lorekeeper: return "A seeker of hidden patterns, old magic, and buried truth."
+        case .envoy: return "A perceptive negotiator who turns strangers into allies."
+        }
+    }
+
+    public var startingAttributes: [Attribute: Int] {
+        switch self {
+        case .vanguard: return [.might: 15, .finesse: 10, .insight: 10, .presence: 10]
+        case .shadow: return [.might: 10, .finesse: 15, .insight: 12, .presence: 8]
+        case .lorekeeper: return [.might: 8, .finesse: 10, .insight: 15, .presence: 12]
+        case .envoy: return [.might: 9, .finesse: 10, .insight: 12, .presence: 15]
+        }
+    }
+
+    public var startingHitPoints: Int {
+        self == .vanguard ? 12 : 10
+    }
+}
+
+public struct CharacterAbility: Identifiable, Equatable, Sendable {
+    public let name: String
+    public let description: String
+
+    public var id: String { name }
+
+    public init(name: String, description: String) {
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct CharacterCreationProfile: Equatable, Sendable {
+    public var name: String
+    public var type: CharacterType
+    public var abilities: [String]
+
+    public init(name: String, type: CharacterType, abilities: [String]) {
+        self.name = name
+        self.type = type
+        self.abilities = abilities
+    }
+
+    public static let `default` = CharacterCreationProfile(
+        name: "Wayfarer",
+        type: .lorekeeper,
+        abilities: ["Read the Unseen", "Keen Eye"]
+    )
+
+    public static let availableAbilities: [CharacterAbility] = [
+        CharacterAbility(name: "Keen Eye", description: "Notice small details, tracks, and hidden mechanisms."),
+        CharacterAbility(name: "Quiet Step", description: "Move with care when the world is listening."),
+        CharacterAbility(name: "Read the Unseen", description: "Recognize old symbols, magic, and unsettling patterns."),
+        CharacterAbility(name: "Silver Tongue", description: "Find the words that open guarded conversations."),
+        CharacterAbility(name: "Hold the Line", description: "Stand firm when fear or force tries to move you."),
+        CharacterAbility(name: "Field Medic", description: "Keep a companion or yourself moving after a hard encounter.")
+    ]
+}
+
 public enum ActionIntent: String, Codable, Sendable {
     case explore
     case social
@@ -69,11 +157,42 @@ public struct Item: Codable, Identifiable, Equatable, Sendable {
 
 public struct PlayerCharacter: Codable, Equatable, Sendable {
     public var name: String
+    public var characterType: CharacterType
+    public var abilities: [String]
     public var level: Int
     public var hitPoints: Int
     public var maxHitPoints: Int
     public var attributes: [Attribute: Int]
     public var inventory: [Item]
+
+    public init(name: String, level: Int, hitPoints: Int, maxHitPoints: Int,
+                attributes: [Attribute: Int], inventory: [Item],
+                characterType: CharacterType = .vanguard, abilities: [String] = []) {
+        self.name = name
+        self.characterType = characterType
+        self.abilities = abilities
+        self.level = level
+        self.hitPoints = hitPoints
+        self.maxHitPoints = maxHitPoints
+        self.attributes = attributes
+        self.inventory = inventory
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, characterType, abilities, level, hitPoints, maxHitPoints, attributes, inventory
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        characterType = try container.decodeIfPresent(CharacterType.self, forKey: .characterType) ?? .vanguard
+        abilities = try container.decodeIfPresent([String].self, forKey: .abilities) ?? []
+        level = try container.decode(Int.self, forKey: .level)
+        hitPoints = try container.decode(Int.self, forKey: .hitPoints)
+        maxHitPoints = try container.decode(Int.self, forKey: .maxHitPoints)
+        attributes = try container.decode([Attribute: Int].self, forKey: .attributes)
+        inventory = try container.decode([Item].self, forKey: .inventory)
+    }
 
     public func modifier(for attribute: Attribute) -> Int {
         (attributes[attribute, default: 0] - 10) / 2

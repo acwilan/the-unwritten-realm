@@ -13,8 +13,10 @@ The co-op core is intentionally independent of the existing single-player `Campa
 ### Start an adventure
 
 1. Open The Unwritten Realm.
-2. Tap **Begin Adventure**.
-3. Read the opening scene and the available paths at your current location.
+2. Tap **Create Your Character**.
+3. Choose a name, type, and up to two signature abilities.
+4. Read the setting, story, and opening scene in the introduction.
+5. Read the opening scene and the available paths at your current location.
 
 Your campaign is saved on the device. If a saved campaign exists, the app opens it when you return.
 
@@ -49,6 +51,7 @@ The world’s rules are authoritative. A narration can describe the result, but 
 Tap the **•••** menu in the top-right corner and choose **Journal** to review:
 
 - current health and ability scores;
+- character type and signature abilities;
 - your inventory;
 - the active quest and objective; and
 - your current location and elapsed time.

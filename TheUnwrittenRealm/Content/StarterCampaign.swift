@@ -1,7 +1,7 @@
 import Foundation
 
 public enum StarterCampaign {
-    public static func make() -> CampaignState {
+    public static func make(profile: CharacterCreationProfile = .default) -> CampaignState {
         let locations = [
             "tavern": Location(id: "tavern", name: "The Lantern & Lark", description: "A warm, crowded tavern where rain ticks against the shutters.", exits: ["square", "blacksmith"], npcIDs: ["mira", "brom"]),
             "square": Location(id: "square", name: "Village Square", description: "A rain-dark square dominated by a dry fountain and a watch post.", exits: ["tavern", "old_road", "forest_path"], npcIDs: ["elian"]),
@@ -19,13 +19,15 @@ public enum StarterCampaign {
             "nessa": NPC(id: "nessa", name: "Nessa Flint", role: "blacksmith", personality: ["blunt", "kind"], goal: "Keep the village supplied.", disposition: 15, knownFacts: ["The chapel altar has a hidden mechanism."], secrets: [], emotionalState: "focused", locationID: "blacksmith"),
             "vek": NPC(id: "vek", name: "Vek-of-the-Bells", role: "goblin bridge keeper", personality: ["clever", "easily bored"], goal: "Make travelers answer the bridge's riddle.", disposition: -10, knownFacts: ["The vault entrance can be reached from this ravine."], secrets: ["Vek is afraid of the bridge bells."], emotionalState: "amused", locationID: "goblin_bridge")
         ]
-        let player = PlayerCharacter(name: "Wayfarer", level: 1, hitPoints: 10, maxHitPoints: 10,
-                                     attributes: [.might: 11, .finesse: 12, .insight: 13, .presence: 12],
+        let player = PlayerCharacter(name: profile.name, level: 1,
+                                     hitPoints: profile.type.startingHitPoints,
+                                     maxHitPoints: profile.type.startingHitPoints,
+                                     attributes: profile.type.startingAttributes,
                                      inventory: [
                                         Item(id: "rope", name: "Coil of rope", description: "Useful for climbing, tying, or improvising.", usable: false),
                                         Item(id: "healing_potion", name: "Healing potion", description: "Restores a little health.", usable: true),
                                         Item(id: "old_coin", name: "Old silver coin", description: "Stamped with a crescent moon.", usable: false)
-                                     ])
+                                     ], characterType: profile.type, abilities: profile.abilities)
         return CampaignState(title: "The Moon Beneath the Hill", player: player, currentLocationID: "tavern",
                              locations: locations, npcs: npcs, quests: [
                                 "moon_vault": Quest(id: "moon_vault", title: "The Moon Beneath the Hill", summary: "Reach the Sunken Vault before the trail goes cold.", status: .active, objective: "Find a way into the Sunken Vault.")

@@ -2,6 +2,17 @@ import XCTest
 @testable import TheUnwrittenRealm
 
 final class GameCoreTests: XCTestCase {
+    func testStarterCampaignUsesCustomCharacterProfile() {
+        let profile = CharacterCreationProfile(name: "Juniper", type: .shadow, abilities: ["Quiet Step", "Keen Eye"])
+        let campaign = StarterCampaign.make(profile: profile)
+
+        XCTAssertEqual(campaign.player.name, "Juniper")
+        XCTAssertEqual(campaign.player.characterType, .shadow)
+        XCTAssertEqual(campaign.player.abilities, ["Quiet Step", "Keen Eye"])
+        XCTAssertEqual(campaign.player.attributes[.finesse], 15)
+        XCTAssertEqual(campaign.player.maxHitPoints, 10)
+    }
+
     func testSkillCheckUsesInjectedRoll() {
         var state = StarterCampaign.make()
         var engine = RulesEngine()

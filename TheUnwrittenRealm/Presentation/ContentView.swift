@@ -6,6 +6,9 @@ struct ContentView: View {
     @State private var showingJournal = false
     @State private var showingCoop = false
     @State private var showingNewCampaignConfirmation = false
+    @State private var showingCharacterCreation = false
+    @State private var showingCampaignIntro = false
+    @State private var pendingCharacterProfile: CharacterCreationProfile?
     @FocusState private var inputIsFocused: Bool
     @StateObject private var speech = SpeechService()
 
@@ -27,8 +30,24 @@ struct ContentView: View {
             if let campaign = session.campaign { JournalView(campaign: campaign) }
         }
         .sheet(isPresented: $showingCoop) { CoopModeView() }
+        .fullScreenCover(isPresented: $showingCharacterCreation, onDismiss: {
+            guard let profile = pendingCharacterProfile else { return }
+            session.startNewCampaign(profile: profile)
+            pendingCharacterProfile = nil
+            showingCampaignIntro = true
+        }) {
+            CharacterCreationView { profile in
+                pendingCharacterProfile = profile
+                showingCharacterCreation = false
+            }
+        }
+        .fullScreenCover(isPresented: $showingCampaignIntro) {
+            if let campaign = session.campaign {
+                CampaignIntroView(campaign: campaign) { showingCampaignIntro = false }
+            }
+        }
         .confirmationDialog("Start a new campaign?", isPresented: $showingNewCampaignConfirmation) {
-            Button("Start New Campaign", role: .destructive) { session.startNewCampaign() }
+            Button("Customize Character", role: .destructive) { showingCharacterCreation = true }
             Button("Cancel", role: .cancel) {}
         } message: { Text("Your current campaign will be replaced on this device.") }
         .alert("Something went wrong", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
@@ -42,7 +61,7 @@ struct ContentView: View {
             Image(systemName: "moon.stars.fill").font(.system(size: 64)).foregroundStyle(.indigo)
             Text("The Moon Beneath the Hill").font(.largeTitle.bold()).multilineTextAlignment(.center)
             Text("A living story where your words become the next move.").font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Begin Adventure", systemImage: "play.fill") { session.startNewCampaign() }.buttonStyle(.borderedProminent)
+            Button("Create Your Character", systemImage: "person.fill.badge.plus") { showingCharacterCreation = true }.buttonStyle(.borderedProminent)
             Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }.buttonStyle(.bordered)
             Spacer()
         }.padding(28)
@@ -143,6 +162,249 @@ struct ContentView: View {
     }
 }
 
+private struct CharacterCreationView: View {
+    let onComplete: (CharacterCreationProfile) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var selectedType: CharacterType = .vanguard
+    @State private var selectedAbilities: [String] = []
+
+    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
+    private var cleanedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canBegin: Bool {
+        !cleanedName.isEmpty && selectedAbilities.count <= 2
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Make the story yours")
+                            .font(.largeTitle.bold())
+                        Text("Choose who walks into the rain. Your choices shape the way the realm answers you.")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Name").font(.headline)
+                        TextField("What are you called?", text: $name)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.words)
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Choose a type").font(.headline)
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(CharacterType.allCases) { type in
+                                Button {
+                                    selectedType = type
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        HStack {
+                                            Image(systemName: type.icon)
+                                            Spacer()
+                                            if selectedType == type {
+                                                Image(systemName: "checkmark.circle.fill")
+                                            }
+                                        }
+                                        .font(.title3)
+                                        Text(type.displayName).font(.headline)
+                                        Text(type.summary)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.leading)
+                                        Text("Might \(type.startingAttributes[.might, default: 0]) · Finesse \(type.startingAttributes[.finesse, default: 0]) · Insight \(type.startingAttributes[.insight, default: 0]) · Presence \(type.startingAttributes[.presence, default: 0])")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+                                    .padding(14)
+                                    .background(selectedType == type ? Color.indigo.opacity(0.14) : Color.secondary.opacity(0.08))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 16)
+                                            .stroke(selectedType == type ? Color.indigo : .clear, lineWidth: 2)
+                                    }
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(selectedType == type ? .indigo : .primary)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Choose abilities").font(.headline)
+                            Spacer()
+                            Text("\(selectedAbilities.count) / 2")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(selectedAbilities.count == 2 ? .indigo : .secondary)
+                        }
+                        Text("Pick up to two signature abilities. They describe your strengths and stay with your character.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        VStack(spacing: 8) {
+                            ForEach(CharacterCreationProfile.availableAbilities) { ability in
+                                let isSelected = selectedAbilities.contains(ability.name)
+                                Button {
+                                    if isSelected {
+                                        selectedAbilities.removeAll { $0 == ability.name }
+                                    } else if selectedAbilities.count < 2 {
+                                        selectedAbilities.append(ability.name)
+                                    }
+                                } label: {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                            .font(.title3)
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(ability.name).font(.subheadline.weight(.semibold))
+                                            Text(ability.description).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(isSelected ? Color.indigo.opacity(0.12) : Color.secondary.opacity(0.08))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(isSelected ? .indigo : .primary)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Ready to enter the realm", systemImage: "sparkles")
+                            .font(.headline)
+                            .foregroundStyle(.indigo)
+                        Text("You can discover the rest through play. There is no single right way to approach the story.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(20)
+                .padding(.bottom, 12)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    onComplete(CharacterCreationProfile(name: cleanedName, type: selectedType, abilities: selectedAbilities))
+                    dismiss()
+                } label: {
+                    Text("Enter the Realm")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(!canBegin)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(.regularMaterial)
+            }
+            .navigationTitle("New Campaign")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct CampaignIntroView: View {
+    let campaign: CampaignState
+    let onContinue: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Image(systemName: "moon.stars.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.indigo)
+                        Text(campaign.title)
+                            .font(.largeTitle.bold())
+                        Text("Your story begins tonight.")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    IntroSection(icon: "globe.americas.fill", title: "The setting", text: "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden.")
+
+                    IntroSection(icon: "book.closed.fill", title: "The story so far", text: "In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill. Mira Vale believes the vault holds the last trace of her missing brother. Others are searching too—and the trail is already going cold.")
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("Your place in it", systemImage: campaign.player.characterType.icon)
+                            .font(.headline)
+                            .foregroundStyle(.indigo)
+                        Text("\(campaign.player.name), the \(campaign.player.characterType.displayName.lowercased()), you arrive at the Lantern & Lark with a few tools, a little history, and no promise that the night will leave you unchanged.")
+                        if !campaign.player.abilities.isEmpty {
+                            Text("Your strengths: \(campaign.player.abilities.joined(separator: " · ")).")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.indigo.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                    IntroSection(icon: "text.bubble.fill", title: "How to play", text: "Describe what you want to do in ordinary language. Talk to people, investigate places, travel along connected paths, use your items, or take a risk. The Dungeon Master interprets your intent, the rules resolve the consequences, and the world remembers what happens.")
+
+                    if let opening = campaign.recentTurns.first?.text {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Opening scene")
+                                .font(.headline)
+                            Text(opening)
+                                .italic()
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(24)
+                .padding(.bottom, 12)
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    onContinue()
+                } label: {
+                    Text("Begin the First Chapter")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                .background(.regularMaterial)
+            }
+            .navigationTitle("Before You Begin")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct IntroSection: View {
+    let icon: String
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(.indigo)
+            Text(text)
+                .foregroundStyle(.primary)
+        }
+    }
+}
+
 private struct MessageBubble: View {
     let entry: ConversationEntry
     @ObservedObject var speech: SpeechService
@@ -183,6 +445,10 @@ private struct JournalView: View {
         NavigationStack {
             List {
                 Section("Character") {
+                    LabeledContent("Type", value: campaign.player.characterType.displayName)
+                    if !campaign.player.abilities.isEmpty {
+                        LabeledContent("Abilities", value: campaign.player.abilities.joined(separator: ", "))
+                    }
                     LabeledContent("Health", value: "\(campaign.player.hitPoints) / \(campaign.player.maxHitPoints)")
                     ForEach(Attribute.allCases, id: \.self) { attribute in LabeledContent(attribute.rawValue.capitalized, value: "\(campaign.player.attributes[attribute, default: 0]) (\(campaign.player.modifier(for: attribute) >= 0 ? "+" : "")\(campaign.player.modifier(for: attribute)))") }
                 }
