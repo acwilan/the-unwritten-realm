@@ -221,4 +221,10 @@ final class GameCoreTests: XCTestCase {
             XCTAssertTrue(error is CoopRuntimeError)
         }
     }
+
+    func testCoopErrorsExposeActionableMessages() {
+        XCTAssertEqual(CoopRuntimeError("Choose a character before acting.").errorDescription, "Choose a character before acting.")
+        XCTAssertEqual(CoopReducerError.invalidEvent("Character is already claimed").errorDescription, "Character is already claimed")
+        XCTAssertEqual(CoopReducerError.invalidTurn.errorDescription, "That action is not valid for the current turn.")
+    }
 }

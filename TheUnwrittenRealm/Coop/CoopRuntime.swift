@@ -69,7 +69,14 @@ public struct CoopStateProjection: Codable, Equatable, Sendable {
     }
 }
 
-public struct CoopRuntimeError: Error, Equatable, Sendable { public let message: String; public init(_ message: String) { self.message = message } }
+public struct CoopRuntimeError: Error, Equatable, Sendable {
+    public let message: String
+    public init(_ message: String) { self.message = message }
+}
+
+extension CoopRuntimeError: LocalizedError {
+    public var errorDescription: String? { message }
+}
 
 /// The single serialization point for authoritative state, validation, dice, and commits.
 public actor HostGameRuntime {

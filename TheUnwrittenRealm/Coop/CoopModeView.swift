@@ -77,8 +77,9 @@ public struct CoopModeView: View {
                                 }
                             }.padding().background(.blue.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 12))
                         }
+                        let localPlayerNeedsCharacter = projection.party.players[session.localPlayerID]?.characterID == nil
                         let availableCharacters = projection.party.characters.values.filter { $0.ownerID == nil }
-                        if !availableCharacters.isEmpty {
+                        if localPlayerNeedsCharacter && !availableCharacters.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Choose your character").font(.headline)
                                 ForEach(Array(availableCharacters), id: \.id) { character in

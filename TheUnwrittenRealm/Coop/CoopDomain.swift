@@ -215,7 +215,23 @@ public struct CommittedCoopEvent: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-public enum CoopReducerError: Error, Equatable, Sendable { case invalidEvent(String); case unknownActor; case unknownScene; case invalidTurn }
+public enum CoopReducerError: Error, Equatable, Sendable {
+    case invalidEvent(String)
+    case unknownActor
+    case unknownScene
+    case invalidTurn
+}
+
+extension CoopReducerError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .invalidEvent(let message): return message
+        case .unknownActor: return "The requested actor is missing from the campaign."
+        case .unknownScene: return "The requested scene is missing from the campaign."
+        case .invalidTurn: return "That action is not valid for the current turn."
+        }
+    }
+}
 
 public extension CoopCampaignState {
     /// Pure canonical transition. Host validation happens before this function.

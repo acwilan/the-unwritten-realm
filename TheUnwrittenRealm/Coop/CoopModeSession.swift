@@ -113,8 +113,17 @@ public final class CoopModeSession: ObservableObject {
     }
 
     private func makeTransport() -> any CoopGameTransport {
-        #if canImport(MultipeerConnectivity)
-        return MultipeerGameTransport(displayName: "Unwritten Realm")
+        #if targetEnvironment(simulator)
+        // Simulator does not provide the iOS local-network privacy path used by
+        // Bonjour/Multipeer Connectivity. Keep the simulator path deterministic
+        // and in-process so UI and protocol flows remain testable from Xcode.
+        return LoopbackCoopTransport()
+        #elseif canImport(MultipeerConnectivity)
+        // MCPeerID display names must be unique within a nearby session. A
+        // short per-session suffix avoids collisions when two devices run the
+        // same app without exposing a user's device name.
+        let suffix = String(UUID().uuidString.prefix(4))
+        return MultipeerGameTransport(displayName: "Unwritten Realm \(suffix)")
         #else
         return LoopbackCoopTransport()
         #endif

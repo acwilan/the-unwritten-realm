@@ -105,7 +105,7 @@ public final class MultipeerGameTransport: NSObject, CoopGameTransport, @uncheck
     }
     public func send(_ data: Data, to recipients: CoopRecipientSet, reliability: CoopReliability) async throws {
         let peers: [MCPeerID]
-        switch recipients { case .all: peers = session.connectedPeers; case .peers(let ids): peers = session.connectedPeers.filter { ids.contains($0.displayName) || ids.contains($0.displayName) } }
+        switch recipients { case .all: peers = session.connectedPeers; case .peers(let ids): peers = session.connectedPeers.filter { ids.contains($0.displayName) } }
         guard !peers.isEmpty else { return }
         try session.send(data, toPeers: peers, with: reliability == .reliable ? .reliable : .unreliable)
     }
