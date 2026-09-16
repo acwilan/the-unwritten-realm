@@ -32,7 +32,7 @@ public struct ScriptedCoopDice: CoopDiceRolling, Sendable {
     }
 }
 
-public struct CoopHostResponse: Sendable {
+public struct CoopHostResponse: Codable, Equatable, Sendable {
     public let accepted: Bool
     public let reason: String?
     public let events: [CommittedCoopEvent]

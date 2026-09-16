@@ -4,7 +4,9 @@ The Unwritten Realm is a native iOS text adventure. You describe what your chara
 
 ## Local co-op
 
-Local co-op is a separate mode from the original single-player campaign. From the home screen (or the campaign menu), choose **Local Co-op**. One iPhone or iPad hosts **The Bell Beneath the Inn**; other nearby devices discover it through Multipeer Connectivity, request admission, and select an unclaimed character. The host owns the authoritative co-op state, dice, event journal, and rules resolution. Clients submit text intentions and receive audience-filtered projections.
+Local co-op is a separate mode from the original single-player campaign. From the home screen (or the campaign menu), choose **Local Co-op**. On one iPhone or iPad, choose **Host a co-op campaign**; on each other device, choose **Find a nearby host**, select the host, wait for approval, and choose an unclaimed character. One iPhone or iPad hosts **The Bell Beneath the Inn** through Multipeer Connectivity. The host owns the authoritative co-op state, dice, event journal, and rules resolution. Clients submit text intentions and receive audience-filtered projections.
+
+The host and all approved players should remain in the co-op story view while playing. **Leave** exits only the current device; **End Session** on the host disconnects all players and returns each device to its previous campaign. The host automatically synchronizes the latest campaign projection to every approved player after each action.
 
 The co-op core is intentionally independent of the existing single-player `CampaignState`: `HostGameRuntime` serializes commands, `CoopCampaignState` is replayable from typed events, `CoopStateProjection` removes unauthorized event data before encoding, and `JSONCoopCampaignJournalStore` provides a snapshot/journal seam for recovery. Simulator and unit-test paths use the loopback transport; nearby-device verification requires two physical devices with local networking permission enabled.
 

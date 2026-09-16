@@ -25,6 +25,7 @@ public enum CoopTransportMessage: Codable, Sendable {
     case intent(CoopPlayerIntentSubmission)
     case eventBatch([CommittedCoopEvent])
     case stateProjection(CoopStateProjection)
+    case hostResponse(CoopHostResponse)
     case acknowledgement(sequence: UInt64)
     case heartbeat
     case resyncRequest(afterSequence: UInt64)

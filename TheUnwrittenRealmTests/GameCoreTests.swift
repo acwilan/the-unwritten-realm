@@ -227,4 +227,26 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(CoopReducerError.invalidEvent("Character is already claimed").errorDescription, "Character is already claimed")
         XCTAssertEqual(CoopReducerError.invalidTurn.errorDescription, "That action is not valid for the current turn.")
     }
+
+    func testCoopHostResponseRoundTripsThroughTransportEnvelope() throws {
+        let campaign = CoopStarterCampaign.make()
+        let response = CoopHostResponse(
+            accepted: false,
+            reason: "Your view is out of date. Synchronize before trying again.",
+            projection: CoopStateProjection(state: campaign, playerID: CoopStarterCampaign.hostPlayerID)
+        )
+        let envelope = CoopWireEnvelope(
+            sessionID: campaign.campaignID,
+            senderPeerID: "host",
+            payload: CoopTransportMessage.hostResponse(response)
+        )
+
+        let data = try JSONEncoder().encode(envelope)
+        let decoded = try JSONDecoder().decode(CoopWireEnvelope<CoopTransportMessage>.self, from: data)
+
+        guard case .hostResponse(let decodedResponse) = decoded.payload else {
+            return XCTFail("Expected a host response message")
+        }
+        XCTAssertEqual(decodedResponse, response)
+    }
 }

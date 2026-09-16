@@ -47,14 +47,10 @@ public final class CoopModeSession: ObservableObject {
         Task { @MainActor in
             do {
                 let peerID = pendingPeerIDs[playerID] ?? "pending-\(playerID.uuidString)"
-                _ = try await runtime.approve(playerID: playerID, peerID: peerID)
-                if let transport {
-                    let projection = await runtime.projection(for: playerID)
-                    let envelope = CoopWireEnvelope(sessionID: UUID(), senderPeerID: "host", payload: CoopTransportMessage.stateProjection(projection))
-                    try await transport.send(try JSONEncoder.coop.encode(envelope), to: .peers([peerID]), reliability: .reliable)
-                }
+                let approvalEvent = try await runtime.approve(playerID: playerID, peerID: peerID)
                 pendingPlayers.removeValue(forKey: playerID)
-                await refresh()
+                pendingPeerIDs.removeValue(forKey: playerID)
+                await synchronizeHostAndPlayers(events: [approvalEvent])
             } catch { errorMessage = error.localizedDescription }
         }
     }
@@ -65,8 +61,9 @@ public final class CoopModeSession: ObservableObject {
         Task { @MainActor in
             if let runtime {
                 let response = await runtime.receive(submission)
-                if response.accepted { self.projection = response.projection; self.state = await runtime.snapshot() }
-                else { self.errorMessage = response.reason ?? "The host rejected that action." }
+                self.projection = response.projection
+                self.state = await runtime.snapshot()
+                if !response.accepted { self.errorMessage = response.reason ?? "The host rejected that action." }
             } else if let transport, let hostPeerID {
                 do {
                     let envelope = CoopWireEnvelope(sessionID: UUID(), senderPeerID: "client-\(localPlayerID.uuidString)", payload: CoopTransportMessage.intent(submission))
@@ -97,6 +94,7 @@ public final class CoopModeSession: ObservableObject {
         eventTask?.cancel(); eventTask = nil
         if let transport { Task { await transport.disconnect() } }
         transport = nil; runtime = nil; state = nil; projection = nil; isHost = false; isBrowsing = false
+        discoveredPeers = []; pendingPlayers = [:]; pendingPeerIDs = [:]; hostPeerID = nil
     }
 
     private func startListening(with transport: any CoopGameTransport, hosting: Bool) {
@@ -134,6 +132,40 @@ public final class CoopModeSession: ObservableObject {
         state = await runtime.snapshot(); projection = await runtime.projection(for: localPlayerID)
     }
 
+    /// Refresh the host UI and send each approved player a projection made for
+    /// that player. Projections are individualized so private observations do
+    /// not leak between players.
+    private func synchronizeHostAndPlayers(events: [CommittedCoopEvent] = []) async {
+        guard isHost, let runtime else { return }
+        let snapshot = await runtime.snapshot()
+        state = snapshot
+        projection = CoopStateProjection(state: snapshot, playerID: localPlayerID, events: events)
+
+        guard let transport else { return }
+        for player in snapshot.party.players.values where player.id != localPlayerID && player.approved {
+            guard let peerID = player.peerID else { continue }
+            let playerProjection = CoopStateProjection(state: snapshot, playerID: player.id, events: events)
+            await send(.stateProjection(playerProjection), to: peerID, using: transport)
+        }
+    }
+
+    private func send(_ message: CoopTransportMessage, to peerID: CoopPeerID, using transport: any CoopGameTransport) async {
+        do {
+            let envelope = CoopWireEnvelope(
+                sessionID: UUID(),
+                senderPeerID: isHost ? "host" : "client-\(localPlayerID.uuidString)",
+                payload: message
+            )
+            try await transport.send(
+                try JSONEncoder.coop.encode(envelope),
+                to: .peers([peerID]),
+                reliability: .reliable
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func handle(_ event: CoopTransportEvent) async {
         switch event {
         case .discovered(let peerID, _): if !discoveredPeers.contains(peerID) { discoveredPeers.append(peerID) }
@@ -145,7 +177,12 @@ public final class CoopModeSession: ObservableObject {
                 let join = CoopWireEnvelope(sessionID: UUID(), senderPeerID: "client-\(localPlayerID.uuidString)", payload: CoopTransportMessage.joinRequest(displayName: "Player", playerID: localPlayerID, protocolVersion: 1))
                 try? await transport.send(try JSONEncoder.coop.encode(join), to: .peers([peerID]), reliability: .reliable)
             }
-        case .disconnected(let peerID): if hostPeerID == peerID { hostPeerID = nil }
+        case .disconnected(let peerID):
+            if hostPeerID == peerID {
+                hostPeerID = nil
+                projection = nil
+                errorMessage = "The host ended the co-op session."
+            }
         case .received(let peerID, let data): await receive(data, from: peerID)
         }
     }
@@ -158,22 +195,41 @@ public final class CoopModeSession: ObservableObject {
             do {
                 let player = try await runtime.registerPlayer(displayName: displayName, playerID: playerID, peerID: peerID)
                 pendingPlayers[player.id] = player.displayName; pendingPeerIDs[player.id] = peerID
+                await synchronizeHostAndPlayers()
             } catch { errorMessage = error.localizedDescription }
-        case .stateProjection(let projection): self.projection = projection
+        case .stateProjection(let projection):
+            guard projection.campaignID == self.projection?.campaignID || self.projection == nil else { return }
+            guard projection.revision >= (self.projection?.revision ?? 0) else { return }
+            self.projection = projection
+        case .hostResponse(let response):
+            guard response.projection.campaignID == self.projection?.campaignID || self.projection == nil else { return }
+            guard response.projection.revision >= (self.projection?.revision ?? 0) else { return }
+            self.projection = response.projection
+            if !response.accepted { errorMessage = response.reason ?? "The host rejected that action." }
         case .intent(let submission):
             guard isHost, let runtime, let transport else { return }
             let response = await runtime.receive(submission)
-            let envelope = CoopWireEnvelope(sessionID: UUID(), senderPeerID: "host", payload: CoopTransportMessage.stateProjection(response.projection))
-            try? await transport.send(try JSONEncoder.coop.encode(envelope), to: .peers([peerID]), reliability: .reliable)
+            await synchronizeHostAndPlayers(events: response.events)
+            await send(.hostResponse(response), to: peerID, using: transport)
         case .characterClaim(let playerID, let characterID, let commandID):
             guard isHost, let runtime, let transport else { return }
             do {
-                _ = try await runtime.claimCharacter(playerID: playerID, characterID: characterID, commandID: commandID)
+                let claimEvent = try await runtime.claimCharacter(playerID: playerID, characterID: characterID, commandID: commandID)
+                await synchronizeHostAndPlayers(events: [claimEvent])
+            } catch {
                 let projection = await runtime.projection(for: playerID)
-                let envelope = CoopWireEnvelope(sessionID: UUID(), senderPeerID: "host", payload: CoopTransportMessage.stateProjection(projection))
-                try await transport.send(try JSONEncoder.coop.encode(envelope), to: .peers([peerID]), reliability: .reliable)
-            } catch { errorMessage = error.localizedDescription }
-        case .eventBatch, .acknowledgement, .heartbeat, .resyncRequest: break
+                await send(
+                    .hostResponse(CoopHostResponse(accepted: false, reason: error.localizedDescription, projection: projection)),
+                    to: peerID,
+                    using: transport
+                )
+            }
+        case .resyncRequest:
+            guard isHost, let runtime, let transport else { return }
+            let snapshot = await runtime.snapshot()
+            guard let player = snapshot.party.players.values.first(where: { $0.peerID == peerID }) else { return }
+            await send(.stateProjection(CoopStateProjection(state: snapshot, playerID: player.id)), to: peerID, using: transport)
+        case .eventBatch, .acknowledgement, .heartbeat: break
         }
     }
 }

@@ -5,7 +5,7 @@ public struct CoopModeView: View {
     @Environment(\.appLanguage) private var language
     @StateObject private var session = CoopModeSession()
     @State private var draft = ""
-    @State private var showingLobby = false
+    @State private var showingEndSessionConfirmation = false
 
     public init() {}
 
@@ -24,7 +24,20 @@ public struct CoopModeView: View {
                 }
             }
             .navigationTitle("Local Co-op")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Done") { session.stop(); dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(session.isHost ? "End Session" : "Leave") {
+                        if session.isHost { showingEndSessionConfirmation = true }
+                        else { leaveSession() }
+                    }
+                }
+            }
+            .confirmationDialog("End co-op session?", isPresented: $showingEndSessionConfirmation) {
+                Button("End Session", role: .destructive) { leaveSession() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("All connected players will be disconnected and return to their previous campaign.")
+            }
             .alert("Co-op", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
                 Button("OK") { session.errorMessage = nil }
             } message: { Text(session.errorMessage ?? "") }
@@ -34,7 +47,7 @@ public struct CoopModeView: View {
     private var lobby: some View {
         List {
             Section {
-                Text("Each player joins with their own device. One player hosts the authoritative campaign and approves every connection.")
+                Text("Host: start the co-op campaign here. Joiners: find the host nearby, wait for approval, then choose an unclaimed character before acting.")
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Section("Start") {
@@ -91,6 +104,11 @@ public struct CoopModeView: View {
                                 }
                             }.padding().background(.green.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 12))
                         }
+                        if localPlayerNeedsCharacter && availableCharacters.isEmpty {
+                            Text("Waiting for an unclaimed character.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                         Text(scene.name).font(.title2.bold())
                         Text(scene.description).foregroundStyle(.secondary)
                         if !scene.exits.isEmpty { Text(AppLocalization.format("Exits: %@", language: language, scene.exits.joined(separator: " · "))).font(.caption).foregroundStyle(.secondary) }
@@ -107,11 +125,23 @@ public struct CoopModeView: View {
                 }
             }
             HStack {
-                TextField("What does the party do?", text: $draft, axis: .vertical).textFieldStyle(.roundedBorder).lineLimit(1...3)
+                TextField(localPlayerNeedsCharacter ? "Choose a character first" : "What does the party do?", text: $draft, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...3)
+                    .disabled(localPlayerNeedsCharacter)
                 Button { let value = draft; draft = ""; session.submit(value) } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(localPlayerNeedsCharacter || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding().background(.regularMaterial)
         }
+    }
+
+    private var localPlayerNeedsCharacter: Bool {
+        session.projection?.party.players[session.localPlayerID]?.characterID == nil
+    }
+
+    private func leaveSession() {
+        session.stop()
+        dismiss()
     }
 
     private func eventDescription(_ event: CoopGameEvent) -> String {
