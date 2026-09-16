@@ -12,7 +12,7 @@ The co-op core is intentionally independent of the existing single-player `Campa
 
 ### Languages
 
-The app defaults to English and can be switched from the **Language** menu on the home screen or campaign toolbar. It currently supports English, Spanish, Portuguese, French, German, and Italian. The selection is saved on the device and applies immediately.
+The app supports English, Spanish, Portuguese, French, German, and Italian. Language selection follows Apple's standard order: the language configured for this app in iOS Settings, the OS's preferred language, then English. To choose a language, open **Settings > Apps > The Unwritten Realm > Language** on iOS.
 
 Translations live in `TheUnwrittenRealm/Localization/<language>.lproj/Localizable.strings`. To add a language, add its locale code to `AppLanguage`, create the matching `.lproj` file, add that file to the `Localizable.strings` variant group in the Xcode project, and add the locale to `knownRegions`. SwiftUI labels use the English key as the fallback, while `AppLocalization` is used for formatted strings and copy resolved outside a view.
 

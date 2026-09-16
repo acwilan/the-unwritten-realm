@@ -1,8 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// Languages the app can display independently of the device's system language.
-/// English is deliberately the first case and the fallback for missing entries.
+/// Languages shipped with the app. English is the final fallback for missing entries.
 public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     case english = "en"
     case spanish = "es"
@@ -14,20 +13,20 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
     public var locale: Locale { Locale(identifier: rawValue) }
 
-    public var displayNameKey: String {
-        switch self {
-        case .english: return "English"
-        case .spanish: return "Spanish"
-        case .portuguese: return "Portuguese"
-        case .french: return "French"
-        case .german: return "German"
-        case .italian: return "Italian"
+    /// Resolves in Apple's normal order: per-app language setting, OS preference, English.
+    public static var current: AppLanguage {
+        for localization in Bundle.main.preferredLocalizations {
+            let code = localization.split { $0 == "-" || $0 == "_" }.first.map(String.init)
+            if let code, let language = AppLanguage(rawValue: code) {
+                return language
+            }
         }
+        return .english
     }
 }
 
 private struct AppLanguageKey: EnvironmentKey {
-    static let defaultValue = AppLanguage.english
+    static let defaultValue = AppLanguage.current
 }
 
 extension EnvironmentValues {
@@ -84,33 +83,5 @@ public extension CharacterAbility {
 
     func localizedDescription(in language: AppLanguage) -> String {
         AppLocalization.string(description, language: language)
-    }
-}
-
-struct LanguagePicker: View {
-    @Binding var selectedLanguageCode: String
-
-    private var selectedLanguage: AppLanguage {
-        AppLanguage(rawValue: selectedLanguageCode) ?? .english
-    }
-
-    var body: some View {
-        Menu {
-            ForEach(AppLanguage.allCases) { language in
-                Button {
-                    selectedLanguageCode = language.rawValue
-                } label: {
-                    HStack {
-                        Text(LocalizedStringKey(language.displayNameKey))
-                        if selectedLanguage == language {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            Label("Language", systemImage: "globe")
-        }
-        .accessibilityLabel("Language")
     }
 }

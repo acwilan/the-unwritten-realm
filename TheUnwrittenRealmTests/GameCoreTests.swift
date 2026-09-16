@@ -2,6 +2,22 @@ import XCTest
 @testable import TheUnwrittenRealm
 
 final class GameCoreTests: XCTestCase {
+    func testAIResponseParsingAcceptsFencedInterpreterJSON() {
+        let content = "```json\n{\"intent\":\"explore\",\"referencedItemName\":null,\"destinationID\":null,\"approach\":\"Look around\",\"desiredOutcome\":\"Observe the room\",\"targetID\":null,\"targetName\":null}\n```"
+
+        XCTAssertEqual(AIResponseParsing.action(from: content)?.intent, .explore)
+    }
+
+    func testAIResponseParsingRejectsStructuredInterpreterOutputAsNarration() {
+        let content = "```json\n{\"intent\":\"explore\",\"referencedItemName\":null,\"destinationID\":null,\"approach\":\"Look around\",\"desiredOutcome\":\"Observe the room\",\"targetID\":null,\"targetName\":null}\n```"
+
+        XCTAssertNil(AIResponseParsing.narrationText(from: content))
+    }
+
+    func testAIResponseParsingUnwrapsStructuredNarration() {
+        XCTAssertEqual(AIResponseParsing.narrationText(from: "{\"narration\":\"The rain fades.\"}"), "The rain fades.")
+    }
+
     func testSupportedLanguagesUseEnglishAsTheDefaultAndStableLocaleCodes() {
         XCTAssertEqual(AppLanguage.english.rawValue, "en")
         XCTAssertEqual(AppLanguage.allCases, [.english, .spanish, .portuguese, .french, .german, .italian])

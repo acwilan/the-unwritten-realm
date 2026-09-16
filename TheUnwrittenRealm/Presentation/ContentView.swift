@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var session: GameSession
-    @Binding var selectedLanguageCode: String
     @Environment(\.appLanguage) private var language
     @State private var draft = ""
     @State private var showingJournal = false
@@ -59,10 +58,6 @@ struct ContentView: View {
 
     private var welcomeView: some View {
         VStack(spacing: 22) {
-            HStack {
-                Spacer()
-                LanguagePicker(selectedLanguageCode: $selectedLanguageCode)
-            }
             Spacer()
             Image(systemName: "moon.stars.fill").font(.system(size: 64)).foregroundStyle(.indigo)
             Text("The Moon Beneath the Hill").font(.largeTitle.bold()).multilineTextAlignment(.center)
@@ -80,7 +75,6 @@ struct ContentView: View {
                     .font(.headline)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                LanguagePicker(selectedLanguageCode: $selectedLanguageCode)
                 Menu {
                     Button("Journal", systemImage: "book.closed") { showingJournal = true }
                     Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }
