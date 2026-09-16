@@ -2,6 +2,12 @@ import XCTest
 @testable import TheUnwrittenRealm
 
 final class GameCoreTests: XCTestCase {
+    func testSupportedLanguagesUseEnglishAsTheDefaultAndStableLocaleCodes() {
+        XCTAssertEqual(AppLanguage.english.rawValue, "en")
+        XCTAssertEqual(AppLanguage.allCases, [.english, .spanish, .portuguese, .french, .german, .italian])
+        XCTAssertEqual(AppLanguage.english.locale.identifier, "en")
+    }
+
     func testStarterCampaignUsesCustomCharacterProfile() {
         let profile = CharacterCreationProfile(name: "Juniper", type: .shadow, abilities: ["Quiet Step", "Keen Eye"])
         let campaign = StarterCampaign.make(profile: profile)

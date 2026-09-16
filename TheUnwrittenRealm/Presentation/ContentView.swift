@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var session: GameSession
+    @Binding var selectedLanguageCode: String
+    @Environment(\.appLanguage) private var language
     @State private var draft = ""
     @State private var showingJournal = false
     @State private var showingCoop = false
@@ -32,7 +34,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingCoop) { CoopModeView() }
         .fullScreenCover(isPresented: $showingCharacterCreation, onDismiss: {
             guard let profile = pendingCharacterProfile else { return }
-            session.startNewCampaign(profile: profile)
+            session.startNewCampaign(profile: profile, language: language)
             pendingCharacterProfile = nil
             showingCampaignIntro = true
         }) {
@@ -57,6 +59,10 @@ struct ContentView: View {
 
     private var welcomeView: some View {
         VStack(spacing: 22) {
+            HStack {
+                Spacer()
+                LanguagePicker(selectedLanguageCode: $selectedLanguageCode)
+            }
             Spacer()
             Image(systemName: "moon.stars.fill").font(.system(size: 64)).foregroundStyle(.indigo)
             Text("The Moon Beneath the Hill").font(.largeTitle.bold()).multilineTextAlignment(.center)
@@ -74,6 +80,7 @@ struct ContentView: View {
                     .font(.headline)
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                LanguagePicker(selectedLanguageCode: $selectedLanguageCode)
                 Menu {
                     Button("Journal", systemImage: "book.closed") { showingJournal = true }
                     Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }
@@ -102,7 +109,7 @@ struct ContentView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 6)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Apple Foundation Models unavailable. \(reason)")
+                        .accessibilityLabel(Text(AppLocalization.format("On-device AI unavailable. %@", language: language, reason)))
             }
 
             ScrollViewReader { proxy in
@@ -111,7 +118,7 @@ struct ContentView: View {
                         if let location = campaign.currentLocation {
                             Text(location.description).font(.subheadline).foregroundStyle(.secondary).padding(.horizontal)
                             if !location.exits.isEmpty {
-                                Text("Paths: " + location.exits.compactMap { campaign.locations[$0]?.name }.joined(separator: " · "))
+                                Text(AppLocalization.format("Paths: %@", language: language, location.exits.compactMap { campaign.locations[$0]?.name }.joined(separator: " · ")))
                                     .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
                             }
                         }
@@ -133,7 +140,7 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 if let check = session.lastCheck {
-                    Text("Last check · \(check.label)")
+                    Text(AppLocalization.format("Last check · %@", language: language, check.label))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 5)
@@ -165,6 +172,7 @@ struct ContentView: View {
 private struct CharacterCreationView: View {
     let onComplete: (CharacterCreationProfile) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var language
     @State private var name = ""
     @State private var selectedType: CharacterType = .vanguard
     @State private var selectedAbilities: [String] = []
@@ -213,12 +221,16 @@ private struct CharacterCreationView: View {
                                             }
                                         }
                                         .font(.title3)
-                                        Text(type.displayName).font(.headline)
-                                        Text(type.summary)
+                                        Text(type.localizedDisplayName(in: language)).font(.headline)
+                                        Text(type.localizedSummary(in: language))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                             .multilineTextAlignment(.leading)
-                                        Text("Might \(type.startingAttributes[.might, default: 0]) · Finesse \(type.startingAttributes[.finesse, default: 0]) · Insight \(type.startingAttributes[.insight, default: 0]) · Presence \(type.startingAttributes[.presence, default: 0])")
+                                        Text(AppLocalization.format("Might %@ · Finesse %@ · Insight %@ · Presence %@", language: language,
+                                                                    String(type.startingAttributes[.might, default: 0]),
+                                                                    String(type.startingAttributes[.finesse, default: 0]),
+                                                                    String(type.startingAttributes[.insight, default: 0]),
+                                                                    String(type.startingAttributes[.presence, default: 0])))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
@@ -262,8 +274,8 @@ private struct CharacterCreationView: View {
                                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                                             .font(.title3)
                                         VStack(alignment: .leading, spacing: 3) {
-                                            Text(ability.name).font(.subheadline.weight(.semibold))
-                                            Text(ability.description).font(.caption).foregroundStyle(.secondary)
+                                            Text(ability.localizedName(in: language)).font(.subheadline.weight(.semibold))
+                                            Text(ability.localizedDescription(in: language)).font(.caption).foregroundStyle(.secondary)
                                         }
                                         Spacer(minLength: 0)
                                     }
@@ -319,6 +331,7 @@ private struct CharacterCreationView: View {
 private struct CampaignIntroView: View {
     let campaign: CampaignState
     let onContinue: () -> Void
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         NavigationStack {
@@ -328,7 +341,7 @@ private struct CampaignIntroView: View {
                         Image(systemName: "moon.stars.fill")
                             .font(.system(size: 44))
                             .foregroundStyle(.indigo)
-                        Text(campaign.title)
+                        Text(AppLocalization.string(campaign.title, language: language))
                             .font(.largeTitle.bold())
                         Text("Your story begins tonight.")
                             .font(.title3)
@@ -343,9 +356,15 @@ private struct CampaignIntroView: View {
                         Label("Your place in it", systemImage: campaign.player.characterType.icon)
                             .font(.headline)
                             .foregroundStyle(.indigo)
-                        Text("\(campaign.player.name), the \(campaign.player.characterType.displayName.lowercased()), you arrive at the Lantern & Lark with a few tools, a little history, and no promise that the night will leave you unchanged.")
+                        Text(AppLocalization.format("%@, the %@, you arrive at the Lantern & Lark with a few tools, a little history, and no promise that the night will leave you unchanged.",
+                                                    language: language,
+                                                    campaign.player.name,
+                                                    campaign.player.characterType.localizedDisplayName(in: language).lowercased(with: language.locale)))
                         if !campaign.player.abilities.isEmpty {
-                            Text("Your strengths: \(campaign.player.abilities.joined(separator: " · ")).")
+                            Text(AppLocalization.format("Your strengths: %@.", language: language,
+                                                        campaign.player.abilities.map { ability in
+                                                            AppLocalization.string(ability, language: language)
+                                                        }.joined(separator: " · ")))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -391,8 +410,8 @@ private struct CampaignIntroView: View {
 
 private struct IntroSection: View {
     let icon: String
-    let title: String
-    let text: String
+    let title: LocalizedStringKey
+    let text: LocalizedStringKey
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -408,13 +427,14 @@ private struct IntroSection: View {
 private struct MessageBubble: View {
     let entry: ConversationEntry
     @ObservedObject var speech: SpeechService
+    @Environment(\.appLanguage) private var language
 
     var body: some View {
         HStack {
             if entry.speaker == .player { Spacer(minLength: 35) }
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(entry.speaker == .player ? "You" : (entry.speakerName ?? "Dungeon Master"))
+                    Text(entry.speaker == .player ? AppLocalization.string("You", language: language) : (entry.speakerName ?? AppLocalization.string("Dungeon Master", language: language)))
                         .font(.caption.bold())
                         .foregroundStyle(entry.speaker == .player ? .indigo : .secondary)
                     Spacer(minLength: 8)
@@ -427,7 +447,7 @@ private struct MessageBubble: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        .accessibilityLabel(speech.isSpeaking(entry) ? "Stop speaking" : "Read aloud")
+                        .accessibilityLabel(Text(speech.isSpeaking(entry) ? AppLocalization.string("Stop speaking", language: language) : AppLocalization.string("Read aloud", language: language)))
                     }
                 }
                 Text(entry.text)
@@ -441,22 +461,23 @@ private struct MessageBubble: View {
 private struct JournalView: View {
     let campaign: CampaignState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var language
     var body: some View {
         NavigationStack {
             List {
                 Section("Character") {
-                    LabeledContent("Type", value: campaign.player.characterType.displayName)
+                    LabeledContent("Type", value: campaign.player.characterType.localizedDisplayName(in: language))
                     if !campaign.player.abilities.isEmpty {
                         LabeledContent("Abilities", value: campaign.player.abilities.joined(separator: ", "))
                     }
                     LabeledContent("Health", value: "\(campaign.player.hitPoints) / \(campaign.player.maxHitPoints)")
-                    ForEach(Attribute.allCases, id: \.self) { attribute in LabeledContent(attribute.rawValue.capitalized, value: "\(campaign.player.attributes[attribute, default: 0]) (\(campaign.player.modifier(for: attribute) >= 0 ? "+" : "")\(campaign.player.modifier(for: attribute)))") }
+                    ForEach(Attribute.allCases, id: \.self) { attribute in LabeledContent(attribute.localizedDisplayName(in: language), value: "\(campaign.player.attributes[attribute, default: 0]) (\(campaign.player.modifier(for: attribute) >= 0 ? "+" : "")\(campaign.player.modifier(for: attribute)))") }
                 }
                 Section("Inventory") {
                     ForEach(campaign.player.inventory) { item in VStack(alignment: .leading) { Text(item.name); Text(item.description).font(.caption).foregroundStyle(.secondary) } }
                 }
                 if let quest = campaign.activeQuest { Section("Quest") { Text(quest.title).font(.headline); Text(quest.objective); Text(quest.summary).font(.caption).foregroundStyle(.secondary) } }
-                Section("Current location") { Text(campaign.currentLocation?.name ?? "Unknown"); Text("\(campaign.minutesElapsed) minutes elapsed").font(.caption).foregroundStyle(.secondary) }
+                Section("Current location") { Text(campaign.currentLocation?.name ?? AppLocalization.string("Unknown", language: language)); Text(AppLocalization.format("%@ minutes elapsed", language: language, String(campaign.minutesElapsed))).font(.caption).foregroundStyle(.secondary) }
             }.navigationTitle("Journal").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
     }

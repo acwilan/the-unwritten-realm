@@ -36,17 +36,23 @@ public final class GameSession: ObservableObject {
         #endif
     }
 
-    public func startNewCampaign(profile: CharacterCreationProfile = .default) {
+    public func startNewCampaign(profile: CharacterCreationProfile = .default, language: AppLanguage = .english) {
         campaign = StarterCampaign.make(profile: profile)
-        do { try store.save(campaign!) } catch { errorMessage = "Could not save the new campaign." }
+        do { try store.save(campaign!) } catch {
+            errorMessage = AppLocalization.string("Could not save the new campaign.", language: language)
+        }
     }
 
-    public func continueCampaign() {
-        do { campaign = try store.load() } catch { errorMessage = "Could not load the campaign." }
+    public func continueCampaign(language: AppLanguage = .english) {
+        do { campaign = try store.load() } catch {
+            errorMessage = AppLocalization.string("Could not load the campaign.", language: language)
+        }
     }
 
-    public func deleteCampaign() {
-        do { try store.delete(); campaign = nil } catch { errorMessage = "Could not delete the campaign." }
+    public func deleteCampaign(language: AppLanguage = .english) {
+        do { try store.delete(); campaign = nil } catch {
+            errorMessage = AppLocalization.string("Could not delete the campaign.", language: language)
+        }
     }
 
     public func submit(_ rawText: String) {

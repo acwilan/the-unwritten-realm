@@ -10,6 +10,12 @@ The co-op core is intentionally independent of the existing single-player `Campa
 
 ## End-user guide
 
+### Languages
+
+The app defaults to English and can be switched from the **Language** menu on the home screen or campaign toolbar. It currently supports English, Spanish, Portuguese, French, German, and Italian. The selection is saved on the device and applies immediately.
+
+Translations live in `TheUnwrittenRealm/Localization/<language>.lproj/Localizable.strings`. To add a language, add its locale code to `AppLanguage`, create the matching `.lproj` file, add that file to the `Localizable.strings` variant group in the Xcode project, and add the locale to `knownRegions`. SwiftUI labels use the English key as the fallback, while `AppLocalization` is used for formatted strings and copy resolved outside a view.
+
 ### Start an adventure
 
 1. Open The Unwritten Realm.

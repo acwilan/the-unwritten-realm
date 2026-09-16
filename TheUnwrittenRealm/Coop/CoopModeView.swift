@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct CoopModeView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var language
     @StateObject private var session = CoopModeSession()
     @State private var draft = ""
     @State private var showingLobby = false
@@ -19,7 +20,7 @@ public struct CoopModeView: View {
                     Label("Host AI unavailable · deterministic fallback active", systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange).padding(.horizontal).padding(.vertical, 5)
                         .frame(maxWidth: .infinity, alignment: .leading).background(.orange.opacity(0.1))
-                        .accessibilityLabel("On-device AI unavailable. \(reason)")
+                        .accessibilityLabel(Text(AppLocalization.format("On-device AI unavailable. %@", language: language, reason)))
                 }
             }
             .navigationTitle("Local Co-op")
@@ -82,7 +83,7 @@ public struct CoopModeView: View {
                                 Text("Choose your character").font(.headline)
                                 ForEach(Array(availableCharacters), id: \.id) { character in
                                     HStack {
-                                        VStack(alignment: .leading) { Text(character.name); Text("HP \(character.hitPoints)/\(character.maxHitPoints)").font(.caption).foregroundStyle(.secondary) }
+                                        VStack(alignment: .leading) { Text(character.name); Text(AppLocalization.format("HP %@/%@", language: language, String(character.hitPoints), String(character.maxHitPoints))).font(.caption).foregroundStyle(.secondary) }
                                         Spacer()
                                         Button("Choose") { session.claim(character.id) }.buttonStyle(.bordered)
                                     }
@@ -91,10 +92,10 @@ public struct CoopModeView: View {
                         }
                         Text(scene.name).font(.title2.bold())
                         Text(scene.description).foregroundStyle(.secondary)
-                        if !scene.exits.isEmpty { Text("Exits: " + scene.exits.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary) }
+                        if !scene.exits.isEmpty { Text(AppLocalization.format("Exits: %@", language: language, scene.exits.joined(separator: " · "))).font(.caption).foregroundStyle(.secondary) }
                         if let encounter = projection.encounter {
                             VStack(alignment: .leading, spacing: 4) {
-                                Label("Initiative · Round \(encounter.round)", systemImage: "timer")
+                                Label(AppLocalization.format("Initiative · Round %@", language: language, String(encounter.round)), systemImage: "timer")
                                 Text(encounter.entries.map { "\($0.actorID) (\($0.total))" }.joined(separator: "  ·  ")).font(.caption)
                             }.padding().background(.orange.opacity(0.12)).clipShape(RoundedRectangle(cornerRadius: 12))
                         }
@@ -114,16 +115,16 @@ public struct CoopModeView: View {
 
     private func eventDescription(_ event: CoopGameEvent) -> String {
         switch event {
-        case .playerRegistered(_, let name, _): return "\(name) requested to join."
-        case .playerApproved(_, _): return "A player joined the party."
-        case .characterClaimed(_, _): return "A character was claimed."
-        case .actorMoved(_, let scene, _): return "The party moved toward \(scene)."
-        case .rollResolved(_, _, _, let total, let reason): return "\(reason.capitalized): resolved at \(total)."
-        case .damageApplied(_, let amount): return "A hit deals \(amount) damage."
-        case .healingApplied(_, let amount): return "A character recovers \(amount) HP."
-        case .initiativeStarted: return "The encounter begins."
-        case .turnEnded(let actor, _, let round): return "Turn ended for \(actor) · round \(round)."
-        case .initiativeEnded: return "The encounter ends."
+        case .playerRegistered(_, let name, _): return AppLocalization.format("%@ requested to join.", language: language, name)
+        case .playerApproved(_, _): return AppLocalization.string("A player joined the party.", language: language)
+        case .characterClaimed(_, _): return AppLocalization.string("A character was claimed.", language: language)
+        case .actorMoved(_, let scene, _): return AppLocalization.format("The party moved toward %@.", language: language, scene)
+        case .rollResolved(_, _, _, let total, let reason): return AppLocalization.format("%@ resolved at %@.", language: language, reason.capitalized, String(total))
+        case .damageApplied(_, let amount): return AppLocalization.format("A hit deals %@ damage.", language: language, String(amount))
+        case .healingApplied(_, let amount): return AppLocalization.format("A character recovers %@ HP.", language: language, String(amount))
+        case .initiativeStarted: return AppLocalization.string("The encounter begins.", language: language)
+        case .turnEnded(let actor, _, let round): return AppLocalization.format("Turn ended for %@ · round %@.", language: language, actor.uuidString, String(round))
+        case .initiativeEnded: return AppLocalization.string("The encounter ends.", language: language)
         case .worldFactDiscovered(let fact): return fact
         case .narration(let text): return text
         case .privateObservation(let text, _): return text
