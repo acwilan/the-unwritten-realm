@@ -293,10 +293,13 @@ public struct CoopActionProposal: Codable, Equatable, Sendable {
 
 public struct CoopVisibleContext: Sendable {
     public let playerID: CoopPlayerID
+    public let ownActorID: CoopActorID?
     public let scene: CoopScene
     public let actors: [CoopActor]
     public let publicFacts: [String]
-    public init(playerID: CoopPlayerID, scene: CoopScene, actors: [CoopActor], publicFacts: [String]) { self.playerID = playerID; self.scene = scene; self.actors = actors; self.publicFacts = publicFacts }
+    public init(playerID: CoopPlayerID, ownActorID: CoopActorID? = nil, scene: CoopScene, actors: [CoopActor], publicFacts: [String]) {
+        self.playerID = playerID; self.ownActorID = ownActorID; self.scene = scene; self.actors = actors; self.publicFacts = publicFacts
+    }
 }
 
 public protocol CoopIntentInterpreting: Sendable {

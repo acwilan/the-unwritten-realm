@@ -119,7 +119,7 @@ public actor HostGameRuntime {
         guard let characterID = player.characterID else { return remember(CoopHostResponse(accepted: false, reason: "Choose a character before acting.", projection: projection), id: submission.commandID) }
         guard submission.baseRevision == state.revision else { return remember(CoopHostResponse(accepted: false, reason: "Your view is out of date. Synchronize before trying again.", projection: projection), id: submission.commandID) }
         guard let scene = state.world.scenes[state.world.currentSceneID] else { return remember(CoopHostResponse(accepted: false, reason: "The current scene is missing.", projection: projection), id: submission.commandID) }
-        let context = CoopVisibleContext(playerID: submission.playerID, scene: scene,
+        let context = CoopVisibleContext(playerID: submission.playerID, ownActorID: characterID, scene: scene,
                                           actors: state.world.actors.values.filter { $0.sceneID == scene.id }, publicFacts: Array(state.world.facts))
         do {
             let proposal = try await interpreter.interpret(submission: submission, context: context)
@@ -201,7 +201,7 @@ public struct DeterministicCoopInterpreter: CoopIntentInterpreting {
     public init() {}
     public func interpret(submission: CoopPlayerIntentSubmission, context: CoopVisibleContext) async throws -> CoopActionProposal {
         let text = submission.text.lowercased()
-        let ownActor = context.actors.first(where: { $0.kind == .player })?.id ?? UUID()
+        let ownActor = context.ownActorID ?? context.actors.first(where: { $0.kind == .player })?.id ?? UUID()
         if text.contains("end turn") || text == "done" { return CoopActionProposal(command: .endTurn(actorID: ownActor)) }
         if text.contains("attack") || text.contains("fight") {
             guard let target = context.actors.first(where: { $0.kind == .hostile }) else { return CoopActionProposal(command: .attempt(actorID: ownActor, attribute: .might, difficulty: 10, reason: "attack"), confidence: 0.6) }
@@ -227,7 +227,7 @@ public struct AIProviderCoopInterpreter: CoopIntentInterpreting {
         let player = PlayerCharacter(name: "Co-op player", level: 1, hitPoints: 10, maxHitPoints: 10, attributes: [.might: 10, .finesse: 10, .insight: 10, .presence: 10], inventory: [])
         let dmContext = DMContext(location: location, player: player, nearbyNPCs: [], activeQuest: nil, relevantFacts: context.publicFacts, recentConversation: [])
         let action = try await provider.interpret(command: PlayerCommand(id: submission.commandID, rawText: submission.text), context: dmContext)
-        let actorID = context.actors.first(where: { $0.kind == .player })?.id ?? UUID()
+        let actorID = context.ownActorID ?? context.actors.first(where: { $0.kind == .player })?.id ?? UUID()
         if action.intent == .travel, let destination = action.destinationID { return CoopActionProposal(command: .move(actorID: actorID, destination: destination)) }
         if action.intent == .attack, let target = action.targetID, let targetID = UUID(uuidString: target) { return CoopActionProposal(command: .attack(actorID: actorID, targetID: targetID)) }
         let attribute: CoopAttribute = action.intent == .persuade || action.intent == .social || action.intent == .deceive ? .presence : (action.intent == .investigate || action.intent == .explore ? .insight : .finesse)
