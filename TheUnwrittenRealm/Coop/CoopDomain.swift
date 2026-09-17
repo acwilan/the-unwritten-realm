@@ -188,6 +188,7 @@ public enum CoopEventAudience: Codable, Equatable, Sendable {
 }
 
 public enum CoopGameEvent: Codable, Equatable, Sendable {
+    case playerIntent(playerID: CoopPlayerID, text: String)
     case playerRegistered(playerID: CoopPlayerID, displayName: String, peerID: CoopPeerID)
     case playerApproved(playerID: CoopPlayerID, peerID: CoopPeerID)
     case characterClaimed(playerID: CoopPlayerID, characterID: CoopCharacterID)
@@ -238,6 +239,7 @@ public extension CoopCampaignState {
     func reduced(by event: CoopGameEvent) throws -> CoopCampaignState {
         var next = self
         switch event {
+        case .playerIntent: break
         case .playerRegistered(let playerID, let displayName, let peerID):
             guard next.party.players[playerID] == nil else { throw CoopReducerError.invalidEvent("Player is already registered") }
             next.party.players[playerID] = CoopPlayer(id: playerID, displayName: displayName, peerID: peerID, approved: false)

@@ -8,6 +8,8 @@ public struct CoopModeView: View {
     @State private var showingEndSessionConfirmation = false
     @State private var showingJournal = false
     @State private var showingCampaignDescription = false
+    @FocusState private var inputIsFocused: Bool
+    @StateObject private var speech = SpeechService()
 
     public init() {}
 
@@ -140,11 +142,17 @@ public struct CoopModeView: View {
                                 Text(encounter.entries.map { "\($0.actorID) (\($0.total))" }.joined(separator: "  ·  ")).font(.caption)
                             }.padding().background(.orange.opacity(0.12)).clipShape(RoundedRectangle(cornerRadius: 12))
                         }
-                        ForEach(projection.visibleEvents.suffix(12)) { event in
-                            Text(eventDescription(event.payload)).padding(10).frame(maxWidth: .infinity, alignment: .leading).background(.secondary.opacity(0.1)).clipShape(RoundedRectangle(cornerRadius: 10))
+                        ForEach(projection.visibleEvents.filter {
+                            switch $0.payload {
+                            case .playerRegistered, .playerApproved, .characterClaimed: return false
+                            default: return true
+                            }
+                        }.suffix(16)) { event in
+                            CoopEventView(event: event, projection: projection, localPlayerID: session.localPlayerID, speech: speech)
                         }
                     }.padding()
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
             if session.isProcessing {
                 HStack(spacing: 8) {
@@ -160,11 +168,20 @@ public struct CoopModeView: View {
                 TextField(localPlayerNeedsCharacter ? "Choose a character first" : "What does the party do?", text: $draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...3)
+                    .focused($inputIsFocused)
                     .disabled(localPlayerNeedsCharacter)
-                Button { let value = draft; draft = ""; session.submit(value) } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
+                Button {
+                    let value = draft
+                    draft = ""
+                    inputIsFocused = false
+                    session.submit(value)
+                } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
                     .disabled(localPlayerNeedsCharacter || session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding().background(.regularMaterial)
         }
+        .contentShape(Rectangle())
+        .onTapGesture { inputIsFocused = false }
+        .onDisappear { speech.stop() }
     }
 
     private var localPlayerNeedsCharacter: Bool {
@@ -176,21 +193,101 @@ public struct CoopModeView: View {
         dismiss()
     }
 
+}
+
+private struct CoopEventView: View {
+    let event: CommittedCoopEvent
+    let projection: CoopStateProjection
+    let localPlayerID: CoopPlayerID
+    @ObservedObject var speech: SpeechService
+    @Environment(\.appLanguage) private var language
+
+    private var playerName: String {
+        guard case .playerIntent(let playerID, _) = event.payload else { return "Player" }
+        return projection.party.players[playerID]?.displayName ?? "Player"
+    }
+
+    private var isLocalPlayer: Bool {
+        guard case .playerIntent(let playerID, _) = event.payload else { return false }
+        return playerID == localPlayerID
+    }
+
+    @ViewBuilder
+    var body: some View {
+        switch event.payload {
+        case .playerIntent(_, let text):
+            HStack {
+                if isLocalPlayer { Spacer(minLength: 35) }
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(isLocalPlayer ? AppLocalization.string("You", language: language) : playerName)
+                        .font(.caption.bold())
+                        .foregroundStyle(.indigo)
+                    Text(text)
+                }
+                .padding(12)
+                .background(Color.indigo.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                if !isLocalPlayer { Spacer(minLength: 20) }
+            }
+            .padding(.horizontal)
+        case .narration(let text):
+            let entry = ConversationEntry(id: event.id, speaker: .narrator, speakerName: "Dungeon Master", text: text)
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Dungeon Master")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button {
+                            speech.toggle(entry)
+                        } label: {
+                            Image(systemName: speech.isSpeaking(entry) ? "stop.fill" : "speaker.wave.2.fill")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(Text(speech.isSpeaking(entry) ? "Stop speaking" : "Read aloud"))
+                    }
+                    Text(text)
+                }
+                .padding(12)
+                .background(Color.secondary.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                Spacer(minLength: 20)
+            }
+            .padding(.horizontal)
+        default:
+            Text(eventDescription(event.payload))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+        }
+    }
+
     private func eventDescription(_ event: CoopGameEvent) -> String {
         switch event {
-        case .playerRegistered(_, let name, _): return AppLocalization.format("%@ requested to join.", language: language, name)
-        case .playerApproved(_, _): return AppLocalization.string("A player joined the party.", language: language)
-        case .characterClaimed(_, _): return AppLocalization.string("A character was claimed.", language: language)
-        case .actorMoved(_, let scene, _): return AppLocalization.format("The party moved toward %@.", language: language, scene)
-        case .rollResolved(_, _, _, let total, let reason): return AppLocalization.format("%@ resolved at %@.", language: language, reason.capitalized, String(total))
-        case .damageApplied(_, let amount): return AppLocalization.format("A hit deals %@ damage.", language: language, String(amount))
-        case .healingApplied(_, let amount): return AppLocalization.format("A character recovers %@ HP.", language: language, String(amount))
-        case .initiativeStarted: return AppLocalization.string("The encounter begins.", language: language)
-        case .turnEnded(let actor, _, let round): return AppLocalization.format("Turn ended for %@ · round %@.", language: language, actor.uuidString, String(round))
-        case .initiativeEnded: return AppLocalization.string("The encounter ends.", language: language)
-        case .worldFactDiscovered(let fact): return fact
-        case .narration(let text): return text
-        case .privateObservation(let text, _): return text
+        case .playerIntent, .playerRegistered, .playerApproved, .characterClaimed, .narration:
+            return ""
+        case .actorMoved(_, let scene, _):
+            return AppLocalization.format("The party moved toward %@.", language: language, scene)
+        case .rollResolved(let expression, let dice, let modifier, let total, let reason):
+            let diceValues = dice.map(String.init).joined(separator: ", ")
+            let modifierText = modifier >= 0 ? "+\(modifier)" : String(modifier)
+            return AppLocalization.format("Roll · %@ [%@] %@ = %@ · %@", language: language, expression, diceValues, modifierText, String(total), reason.capitalized)
+        case .damageApplied(_, let amount):
+            return AppLocalization.format("A hit deals %@ damage.", language: language, String(amount))
+        case .healingApplied(_, let amount):
+            return AppLocalization.format("A character recovers %@ HP.", language: language, String(amount))
+        case .initiativeStarted:
+            return AppLocalization.string("The encounter begins.", language: language)
+        case .turnEnded(let actor, _, let round):
+            return AppLocalization.format("Turn ended for %@ · round %@.", language: language, actor.uuidString, String(round))
+        case .initiativeEnded:
+            return AppLocalization.string("The encounter ends.", language: language)
+        case .worldFactDiscovered(let fact), .privateObservation(let fact, _):
+            return AppLocalization.format("Discovered: %@", language: language, fact)
         }
     }
 }

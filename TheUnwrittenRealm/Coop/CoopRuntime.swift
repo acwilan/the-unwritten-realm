@@ -140,8 +140,11 @@ public actor HostGameRuntime {
         do {
             let proposal = try await interpreter.interpret(submission: submission, context: context)
             guard !proposal.needsClarification else { return remember(CoopHostResponse(accepted: false, reason: "Please clarify what you want to do.", projection: projection), id: submission.commandID) }
-            var events = try resolve(proposal.command, playerID: submission.playerID, characterID: characterID, commandID: submission.commandID)
-            let narrative = try await narrator.narrate(context: CoopNarrationContext(submission: submission, context: context, events: events))
+            let intentEvent = try commit(.playerIntent(playerID: submission.playerID, text: submission.text), audience: .everyone, causedBy: submission.commandID)
+            let resolvedEvents = try resolve(proposal.command, playerID: submission.playerID, characterID: characterID, commandID: submission.commandID)
+            let narrative = try await narrator.narrate(context: CoopNarrationContext(submission: submission, context: context, events: resolvedEvents))
+            var events = [intentEvent]
+            events.append(contentsOf: resolvedEvents)
             events.append(try commit(.narration(text: narrative), audience: .everyone, causedBy: submission.commandID))
             let newProjection = CoopStateProjection(state: state, playerID: submission.playerID, events: journal)
             let response = CoopHostResponse(accepted: true, events: events, projection: newProjection)
@@ -169,7 +172,7 @@ public actor HostGameRuntime {
             let result = dice.rollD20(modifier: character.modifier(for: attribute))
             state.rngState &+= 1
             var events = [try commit(.rollResolved(expression: result.expression, dice: result.dice, modifier: result.modifier, total: result.total, reason: reason), audience: .everyone, causedBy: commandID)]
-            if result.total >= difficulty { events.append(try commit(.worldFactDiscovered(fact: "A successful (attribute.rawValue) check revealed progress."), audience: .everyone, causedBy: commandID)) }
+            if result.total >= difficulty { events.append(try commit(.worldFactDiscovered(fact: "A successful \(attribute.rawValue) check revealed progress."), audience: .everyone, causedBy: commandID)) }
             return events
         case .attack(let actorID, let targetID):
             guard state.phase == .initiative, state.encounter?.activeActorID == actorID else { throw CoopRuntimeError("It is not that character's turn.") }
