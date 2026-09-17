@@ -88,15 +88,24 @@ public actor HostGameRuntime {
     private var journal: [CommittedCoopEvent] = []
     private var nextSequence: UInt64 = 1
 
-    public init(state: CoopCampaignState, interpreter: any CoopIntentInterpreting = DeterministicCoopInterpreter(), narrator: any CoopOutcomeNarrating = TemplateCoopNarrator(), dice: (any CoopDiceRolling)? = nil) {
+    public init(state: CoopCampaignState, interpreter: any CoopIntentInterpreting = DeterministicCoopInterpreter(), narrator: any CoopOutcomeNarrating = TemplateCoopNarrator(), dice: (any CoopDiceRolling)? = nil, initialEvents: [CommittedCoopEvent] = []) {
         self.state = state; self.interpreter = interpreter; self.narrator = narrator; self.dice = dice ?? SeededCoopDice(seed: state.rngState)
+        self.journal = initialEvents
+        self.nextSequence = (initialEvents.map(\.sequence).max() ?? 0) + 1
     }
 
     public func snapshot() -> CoopCampaignState { state }
     public func committedEvents(after sequence: UInt64 = 0) -> [CommittedCoopEvent] { journal.filter { $0.sequence > sequence } }
-    public func projection(for playerID: CoopPlayerID?) -> CoopStateProjection { CoopStateProjection(state: state, playerID: playerID) }
+    public func projection(for playerID: CoopPlayerID?) -> CoopStateProjection { CoopStateProjection(state: state, playerID: playerID, events: journal) }
 
     public func registerPlayer(displayName: String, playerID: CoopPlayerID = UUID(), peerID: CoopPeerID) throws -> CoopPlayer {
+        if var existing = state.party.players[playerID] {
+            if existing.peerID != peerID {
+                existing.peerID = peerID
+                state.party.players[playerID] = existing
+            }
+            return existing
+        }
         guard state.party.players.count < 6 else { throw CoopRuntimeError("This session already has six players.") }
         guard !state.party.players.values.contains(where: { $0.peerID == peerID }) else { throw CoopRuntimeError("This device is already in the session.") }
         _ = try commit(.playerRegistered(playerID: playerID, displayName: displayName, peerID: peerID), audience: .everyone)
@@ -120,7 +129,7 @@ public actor HostGameRuntime {
             return CoopHostResponse(accepted: previous.accepted, reason: previous.reason, events: previous.events,
                                     projection: previous.projection, duplicate: true)
         }
-        let projection = CoopStateProjection(state: state, playerID: submission.playerID)
+        let projection = CoopStateProjection(state: state, playerID: submission.playerID, events: journal)
         guard submission.campaignID == state.campaignID else { return remember(CoopHostResponse(accepted: false, reason: "This command belongs to another campaign.", projection: projection), id: submission.commandID) }
         guard let player = state.party.players[submission.playerID], player.approved else { return remember(CoopHostResponse(accepted: false, reason: "The host has not approved this player.", projection: projection), id: submission.commandID) }
         guard let characterID = player.characterID else { return remember(CoopHostResponse(accepted: false, reason: "Choose a character before acting.", projection: projection), id: submission.commandID) }
@@ -134,13 +143,13 @@ public actor HostGameRuntime {
             var events = try resolve(proposal.command, playerID: submission.playerID, characterID: characterID, commandID: submission.commandID)
             let narrative = try await narrator.narrate(context: CoopNarrationContext(submission: submission, context: context, events: events))
             events.append(try commit(.narration(text: narrative), audience: .everyone, causedBy: submission.commandID))
-            let newProjection = CoopStateProjection(state: state, playerID: submission.playerID, events: events)
+            let newProjection = CoopStateProjection(state: state, playerID: submission.playerID, events: journal)
             let response = CoopHostResponse(accepted: true, events: events, projection: newProjection)
             return remember(response, id: submission.commandID)
         } catch let error as CoopRuntimeError {
-            return remember(CoopHostResponse(accepted: false, reason: error.message, projection: CoopStateProjection(state: state, playerID: submission.playerID)), id: submission.commandID)
+            return remember(CoopHostResponse(accepted: false, reason: error.message, projection: CoopStateProjection(state: state, playerID: submission.playerID, events: journal)), id: submission.commandID)
         } catch {
-            return remember(CoopHostResponse(accepted: false, reason: "The action could not be resolved.", projection: CoopStateProjection(state: state, playerID: submission.playerID)), id: submission.commandID)
+            return remember(CoopHostResponse(accepted: false, reason: "The action could not be resolved.", projection: CoopStateProjection(state: state, playerID: submission.playerID, events: journal)), id: submission.commandID)
         }
     }
 

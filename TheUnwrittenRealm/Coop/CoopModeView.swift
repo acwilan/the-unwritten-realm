@@ -6,6 +6,8 @@ public struct CoopModeView: View {
     @StateObject private var session = CoopModeSession()
     @State private var draft = ""
     @State private var showingEndSessionConfirmation = false
+    @State private var showingJournal = false
+    @State private var showingCampaignDescription = false
 
     public init() {}
 
@@ -31,12 +33,32 @@ public struct CoopModeView: View {
                         else { leaveSession() }
                     }
                 }
+                if session.projection != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button("Journal", systemImage: "book.closed") { showingJournal = true }
+                            Button("Campaign Description", systemImage: "text.book.closed") { showingCampaignDescription = true }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.title2)
+                        }
+                        .accessibilityLabel("Campaign menu")
+                    }
+                }
             }
             .confirmationDialog("End co-op session?", isPresented: $showingEndSessionConfirmation) {
                 Button("End Session", role: .destructive) { leaveSession() }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("All connected players will be disconnected and return to their previous campaign.")
+            }
+            .sheet(isPresented: $showingJournal) {
+                if let projection = session.projection {
+                    CoopJournalView(projection: projection, playerID: session.localPlayerID)
+                }
+            }
+            .sheet(isPresented: $showingCampaignDescription) {
+                CoopCampaignDescriptionView()
             }
             .alert("Co-op", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
                 Button("OK") { session.errorMessage = nil }
@@ -124,13 +146,23 @@ public struct CoopModeView: View {
                     }.padding()
                 }
             }
+            if session.isProcessing {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("The Dungeon Master is thinking…")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.bottom, 4)
+            }
             HStack {
                 TextField(localPlayerNeedsCharacter ? "Choose a character first" : "What does the party do?", text: $draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...3)
                     .disabled(localPlayerNeedsCharacter)
                 Button { let value = draft; draft = ""; session.submit(value) } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
-                    .disabled(localPlayerNeedsCharacter || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(localPlayerNeedsCharacter || session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }.padding().background(.regularMaterial)
         }
     }
@@ -159,6 +191,107 @@ public struct CoopModeView: View {
         case .worldFactDiscovered(let fact): return fact
         case .narration(let text): return text
         case .privateObservation(let text, _): return text
+        }
+    }
+}
+
+private struct CoopCampaignDescriptionView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    CoopIntroSection(
+                        icon: "globe.americas.fill",
+                        title: "The setting",
+                        text: "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden."
+                    )
+                    CoopIntroSection(
+                        icon: "book.closed.fill",
+                        title: "The story so far",
+                        text: "At the Lantern & Lark, a bell rings beneath the floorboards while rain seals the roads outside. The party has arrived at the beginning of a mystery that will unfold through your shared choices."
+                    )
+                    CoopIntroSection(
+                        icon: "person.2.fill",
+                        title: "How co-op works",
+                        text: "Each player controls one character. Describe what you want the party to do in ordinary language; the host resolves the action and synchronizes the result to every approved player."
+                    )
+                }
+                .padding(24)
+            }
+            .navigationTitle("Campaign Description")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct CoopIntroSection: View {
+    let icon: String
+    let title: LocalizedStringKey
+    let text: LocalizedStringKey
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundStyle(.indigo)
+            Text(text)
+                .foregroundStyle(.primary)
+        }
+    }
+}
+
+private struct CoopJournalView: View {
+    let projection: CoopStateProjection
+    let playerID: CoopPlayerID
+    @Environment(\.dismiss) private var dismiss
+
+    private var player: CoopPlayer? { projection.party.players[playerID] }
+    private var character: CoopCharacter? {
+        guard let characterID = player?.characterID else { return nil }
+        return projection.party.characters[characterID]
+    }
+    private var sceneName: String {
+        projection.world.scenes[projection.world.currentSceneID]?.name ?? projection.world.currentSceneID
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Character") {
+                    LabeledContent("Name", value: character?.name ?? "No character selected")
+                    if let character {
+                        LabeledContent("Health", value: "\(character.hitPoints) / \(character.maxHitPoints)")
+                        LabeledContent("Might", value: String(character.might))
+                        LabeledContent("Finesse", value: String(character.finesse))
+                        LabeledContent("Insight", value: String(character.insight))
+                        LabeledContent("Presence", value: String(character.presence))
+                    }
+                }
+                Section("Inventory") {
+                    if let inventory = character?.inventory, !inventory.isEmpty {
+                        ForEach(inventory, id: \.self) { Text($0) }
+                    } else {
+                        Text("Nothing carried")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section("Current location") {
+                    Text(sceneName)
+                }
+            }
+            .navigationTitle("Journal")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

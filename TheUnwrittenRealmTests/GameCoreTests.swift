@@ -186,6 +186,20 @@ final class GameCoreTests: XCTestCase {
         XCTAssertTrue(stale.reason?.contains("out of date") == true)
     }
 
+    func testCoopProjectionIncludesOpeningNarration() async {
+        let initial = CoopStarterCampaign.make()
+        let runtime = HostGameRuntime(state: initial, initialEvents: [CoopStarterCampaign.openingEvent])
+
+        let projection = await runtime.projection(for: CoopStarterCampaign.hostPlayerID)
+
+        XCTAssertTrue(projection.visibleEvents.contains { event in
+            if case .narration(let text) = event.payload {
+                return text == "Rain ticks against the shutters while a bell sounds beneath the floorboards. The night is waiting for the party to decide what happens next."
+            }
+            return false
+        })
+    }
+
     func testCoopProjectionFiltersPrivateAudienceAtSerializationBoundary() throws {
         let initial = CoopStarterCampaign.make()
         let otherPlayer = UUID()
@@ -220,6 +234,21 @@ final class GameCoreTests: XCTestCase {
         } catch {
             XCTAssertTrue(error is CoopRuntimeError)
         }
+    }
+
+    func testCoopReconnectPreservesApprovedPlayerAndCharacter() async throws {
+        let initial = CoopStarterCampaign.make()
+        let runtime = HostGameRuntime(state: initial)
+        let playerID = (try await runtime.registerPlayer(displayName: "Rin", peerID: "rin-device")).id
+        _ = try await runtime.approve(playerID: playerID, peerID: "rin-device")
+        _ = try await runtime.claimCharacter(playerID: playerID, characterID: CoopStarterCampaign.companionCharacterID)
+
+        let reconnected = try await runtime.registerPlayer(displayName: "Rin", playerID: playerID, peerID: "rin-device-reconnected")
+        let snapshot = await runtime.snapshot()
+
+        XCTAssertTrue(reconnected.approved)
+        XCTAssertEqual(reconnected.characterID, CoopStarterCampaign.companionCharacterID)
+        XCTAssertEqual(snapshot.party.players[playerID]?.peerID, "rin-device-reconnected")
     }
 
     func testCoopErrorsExposeActionableMessages() {

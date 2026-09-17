@@ -4,6 +4,10 @@ public enum CoopStarterCampaign {
     public static let hostPlayerID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     public static let hostCharacterID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
     public static let companionCharacterID = UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+    public static let openingEvent = CommittedCoopEvent(
+        sequence: 0,
+        payload: .narration(text: "Rain ticks against the shutters while a bell sounds beneath the floorboards. The night is waiting for the party to decide what happens next.")
+    )
 
     public static func make() -> CoopCampaignState {
         let scenes: [CoopSceneID: CoopScene] = [

@@ -9,6 +9,7 @@ public final class CoopModeSession: ObservableObject {
     @Published public private(set) var isBrowsing = false
     @Published public private(set) var discoveredPeers: [String] = []
     @Published public private(set) var pendingPlayers: [CoopPlayerID: String] = [:]
+    @Published public private(set) var isProcessing = false
     @Published public private(set) var foundationModelAvailability: FoundationModelAvailability = FoundationModelStatus.current
     @Published public var errorMessage: String?
 
@@ -19,7 +20,9 @@ public final class CoopModeSession: ObservableObject {
     private var pendingPeerIDs: [CoopPlayerID: CoopPeerID] = [:]
     private var hostPeerID: CoopPeerID?
 
-    public init(localPlayerID: CoopPlayerID = UUID()) { self.localPlayerID = localPlayerID }
+    public init(localPlayerID: CoopPlayerID? = nil) {
+        self.localPlayerID = localPlayerID ?? (try? CoopInstallationIdentity().installationID) ?? UUID()
+    }
 
     public func host() {
         let campaign = CoopStarterCampaign.make()
@@ -27,8 +30,8 @@ public final class CoopModeSession: ObservableObject {
         state = campaign; isHost = true; isBrowsing = false
         let interpreter = FallbackCoopInterpreter(primary: AIProviderCoopInterpreter(provider: GameSession.defaultAI()), fallback: DeterministicCoopInterpreter())
         let narrator = FallbackCoopNarrator(primary: AIProviderCoopNarrator(provider: GameSession.defaultAI()), fallback: TemplateCoopNarrator())
-        runtime = HostGameRuntime(state: campaign, interpreter: interpreter, narrator: narrator)
-        projection = CoopStateProjection(state: campaign, playerID: localPlayerID)
+        runtime = HostGameRuntime(state: campaign, interpreter: interpreter, narrator: narrator, initialEvents: [CoopStarterCampaign.openingEvent])
+        projection = CoopStateProjection(state: campaign, playerID: localPlayerID, events: [CoopStarterCampaign.openingEvent])
         startListening(with: makeTransport(), hosting: true)
     }
 
@@ -47,22 +50,23 @@ public final class CoopModeSession: ObservableObject {
         Task { @MainActor in
             do {
                 let peerID = pendingPeerIDs[playerID] ?? "pending-\(playerID.uuidString)"
-                let approvalEvent = try await runtime.approve(playerID: playerID, peerID: peerID)
+                _ = try await runtime.approve(playerID: playerID, peerID: peerID)
                 pendingPlayers.removeValue(forKey: playerID)
                 pendingPeerIDs.removeValue(forKey: playerID)
-                await synchronizeHostAndPlayers(events: [approvalEvent])
+                await synchronizeHostAndPlayers()
             } catch { errorMessage = error.localizedDescription }
         }
     }
 
     public func submit(_ text: String) {
-        guard let projection, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let projection, !isProcessing, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let submission = CoopPlayerIntentSubmission(campaignID: projection.campaignID, playerID: localPlayerID, baseRevision: projection.revision, text: text)
+        isProcessing = true
         Task { @MainActor in
+            defer { self.isProcessing = false }
             if let runtime {
                 let response = await runtime.receive(submission)
-                self.projection = response.projection
-                self.state = await runtime.snapshot()
+                await synchronizeHostAndPlayers()
                 if !response.accepted { self.errorMessage = response.reason ?? "The host rejected that action." }
             } else if let transport, let hostPeerID {
                 do {
@@ -94,7 +98,7 @@ public final class CoopModeSession: ObservableObject {
         eventTask?.cancel(); eventTask = nil
         if let transport { Task { await transport.disconnect() } }
         transport = nil; runtime = nil; state = nil; projection = nil; isHost = false; isBrowsing = false
-        discoveredPeers = []; pendingPlayers = [:]; pendingPeerIDs = [:]; hostPeerID = nil
+        discoveredPeers = []; pendingPlayers = [:]; pendingPeerIDs = [:]; hostPeerID = nil; isProcessing = false
     }
 
     private func startListening(with transport: any CoopGameTransport, hosting: Bool) {
@@ -135,16 +139,16 @@ public final class CoopModeSession: ObservableObject {
     /// Refresh the host UI and send each approved player a projection made for
     /// that player. Projections are individualized so private observations do
     /// not leak between players.
-    private func synchronizeHostAndPlayers(events: [CommittedCoopEvent] = []) async {
+    private func synchronizeHostAndPlayers() async {
         guard isHost, let runtime else { return }
         let snapshot = await runtime.snapshot()
         state = snapshot
-        projection = CoopStateProjection(state: snapshot, playerID: localPlayerID, events: events)
+        projection = await runtime.projection(for: localPlayerID)
 
         guard let transport else { return }
         for player in snapshot.party.players.values where player.id != localPlayerID && player.approved {
             guard let peerID = player.peerID else { continue }
-            let playerProjection = CoopStateProjection(state: snapshot, playerID: player.id, events: events)
+            let playerProjection = await runtime.projection(for: player.id)
             await send(.stateProjection(playerProjection), to: peerID, using: transport)
         }
     }
@@ -194,8 +198,11 @@ public final class CoopModeSession: ObservableObject {
             guard isHost, let runtime else { return }
             do {
                 let player = try await runtime.registerPlayer(displayName: displayName, playerID: playerID, peerID: peerID)
-                pendingPlayers[player.id] = player.displayName; pendingPeerIDs[player.id] = peerID
-                await synchronizeHostAndPlayers()
+                if player.approved {
+                    await synchronizeHostAndPlayers()
+                } else {
+                    pendingPlayers[player.id] = player.displayName; pendingPeerIDs[player.id] = peerID
+                }
             } catch { errorMessage = error.localizedDescription }
         case .stateProjection(let projection):
             guard projection.campaignID == self.projection?.campaignID || self.projection == nil else { return }
@@ -209,13 +216,13 @@ public final class CoopModeSession: ObservableObject {
         case .intent(let submission):
             guard isHost, let runtime, let transport else { return }
             let response = await runtime.receive(submission)
-            await synchronizeHostAndPlayers(events: response.events)
+            await synchronizeHostAndPlayers()
             await send(.hostResponse(response), to: peerID, using: transport)
         case .characterClaim(let playerID, let characterID, let commandID):
             guard isHost, let runtime, let transport else { return }
             do {
-                let claimEvent = try await runtime.claimCharacter(playerID: playerID, characterID: characterID, commandID: commandID)
-                await synchronizeHostAndPlayers(events: [claimEvent])
+                _ = try await runtime.claimCharacter(playerID: playerID, characterID: characterID, commandID: commandID)
+                await synchronizeHostAndPlayers()
             } catch {
                 let projection = await runtime.projection(for: playerID)
                 await send(
@@ -228,7 +235,8 @@ public final class CoopModeSession: ObservableObject {
             guard isHost, let runtime, let transport else { return }
             let snapshot = await runtime.snapshot()
             guard let player = snapshot.party.players.values.first(where: { $0.peerID == peerID }) else { return }
-            await send(.stateProjection(CoopStateProjection(state: snapshot, playerID: player.id)), to: peerID, using: transport)
+            let playerProjection = await runtime.projection(for: player.id)
+            await send(.stateProjection(playerProjection), to: peerID, using: transport)
         case .eventBatch, .acknowledgement, .heartbeat: break
         }
     }
