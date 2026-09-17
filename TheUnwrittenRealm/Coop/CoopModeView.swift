@@ -8,6 +8,7 @@ public struct CoopModeView: View {
     @State private var showingEndSessionConfirmation = false
     @State private var showingJournal = false
     @State private var showingCampaignDescription = false
+    @State private var selectedDifficulty: CampaignDifficulty = .easy
     @FocusState private var inputIsFocused: Bool
     @StateObject private var speech = SpeechService()
 
@@ -75,7 +76,16 @@ public struct CoopModeView: View {
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Section("Start") {
-                Button("Host a co-op campaign", systemImage: "antenna.radiowaves.left.and.right") { session.host() }
+                Picker("Difficulty", selection: $selectedDifficulty) {
+                    ForEach(CampaignDifficulty.allCases) { difficulty in
+                        Text(difficulty.localizedDisplayName(in: language)).tag(difficulty)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(selectedDifficulty.localizedDescription(in: language))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Host a co-op campaign", systemImage: "antenna.radiowaves.left.and.right") { session.host(difficulty: selectedDifficulty) }
                 Button("Find a nearby host", systemImage: "magnifyingglass") { session.browse() }
             }
             if session.isBrowsing && !session.discoveredPeers.isEmpty {
@@ -135,6 +145,9 @@ public struct CoopModeView: View {
                         }
                         Text(scene.name).font(.title2.bold())
                         Text(scene.description).foregroundStyle(.secondary)
+                        Label(AppLocalization.format("Difficulty · %@", language: language, projection.difficulty.localizedDisplayName(in: language)), systemImage: "dial.medium")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.indigo)
                         if !scene.exits.isEmpty { Text(AppLocalization.format("Exits: %@", language: language, scene.exits.joined(separator: " · "))).font(.caption).foregroundStyle(.secondary) }
                         if let encounter = projection.encounter {
                             VStack(alignment: .leading, spacing: 4) {

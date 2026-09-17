@@ -45,6 +45,7 @@ public struct CoopHostResponse: Codable, Equatable, Sendable {
 
 public struct CoopStateProjection: Codable, Equatable, Sendable {
     public let campaignID: CoopCampaignID
+    public let difficulty: CampaignDifficulty
     public let revision: UInt64
     public let phase: CoopPlayPhase
     public let party: CoopPartyState
@@ -53,7 +54,7 @@ public struct CoopStateProjection: Codable, Equatable, Sendable {
     public let visibleEvents: [CommittedCoopEvent]
 
     public init(state: CoopCampaignState, playerID: CoopPlayerID?, events: [CommittedCoopEvent] = []) {
-        campaignID = state.campaignID; revision = state.revision; phase = state.phase; encounter = state.encounter
+        campaignID = state.campaignID; difficulty = state.difficulty; revision = state.revision; phase = state.phase; encounter = state.encounter
         let visibleCharacters = state.party.characters.filter { characterID, character in
             guard let playerID else { return true }
             return character.ownerID == playerID || character.sceneID == state.world.currentSceneID
@@ -170,16 +171,18 @@ public actor HostGameRuntime {
         case .attempt(let actorID, let attribute, let difficulty, let reason):
             guard actorID == characterID else { throw CoopRuntimeError("You may only control your own character.") }
             let result = dice.rollD20(modifier: character.modifier(for: attribute))
+            let targetDifficulty = state.difficulty.adjustedTarget(difficulty)
             state.rngState &+= 1
             var events = [try commit(.rollResolved(expression: result.expression, dice: result.dice, modifier: result.modifier, total: result.total, reason: reason), audience: .everyone, causedBy: commandID)]
-            if result.total >= difficulty { events.append(try commit(.worldFactDiscovered(fact: "A successful \(attribute.rawValue) check revealed progress."), audience: .everyone, causedBy: commandID)) }
+            if result.total >= targetDifficulty { events.append(try commit(.worldFactDiscovered(fact: "A successful \(attribute.rawValue) check revealed progress."), audience: .everyone, causedBy: commandID)) }
             return events
         case .attack(let actorID, let targetID):
             guard state.phase == .initiative, state.encounter?.activeActorID == actorID else { throw CoopRuntimeError("It is not that character's turn.") }
             guard actorID == characterID, let target = state.world.actors[targetID], target.sceneID == character.sceneID else { throw CoopRuntimeError("That target cannot be attacked.") }
             let result = dice.rollD20(modifier: character.modifier(for: .might))
+            let targetDefense = state.difficulty.adjustedTarget(target.defense)
             var events = [try commit(.rollResolved(expression: result.expression, dice: result.dice, modifier: result.modifier, total: result.total, reason: "attack"), audience: .everyone, causedBy: commandID)]
-            if result.total >= target.defense {
+            if result.total >= targetDefense {
                 events.append(try commit(.damageApplied(targetID: targetID, amount: 2), audience: .everyone, causedBy: commandID))
                 if state.world.actors.values.filter({ $0.kind == .hostile && !$0.isDefeated }).isEmpty { events.append(try commit(.initiativeEnded, audience: .everyone, causedBy: commandID)) }
             }

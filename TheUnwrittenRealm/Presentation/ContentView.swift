@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var showingCharacterCreation = false
     @State private var showingCampaignIntro = false
     @State private var pendingCharacterProfile: CharacterCreationProfile?
+    @State private var pendingCampaignDifficulty: CampaignDifficulty = .easy
     @FocusState private var inputIsFocused: Bool
     @StateObject private var speech = SpeechService()
 
@@ -37,12 +38,14 @@ struct ContentView: View {
         .sheet(isPresented: $showingCoop) { CoopModeView() }
         .fullScreenCover(isPresented: $showingCharacterCreation, onDismiss: {
             guard let profile = pendingCharacterProfile else { return }
-            session.startNewCampaign(profile: profile, language: language)
+            session.startNewCampaign(profile: profile, difficulty: pendingCampaignDifficulty, language: language)
             pendingCharacterProfile = nil
+            pendingCampaignDifficulty = .easy
             showingCampaignIntro = true
         }) {
-            CharacterCreationView { profile in
+            CharacterCreationView { profile, difficulty in
                 pendingCharacterProfile = profile
+                pendingCampaignDifficulty = difficulty
                 showingCharacterCreation = false
             }
         }
@@ -169,12 +172,13 @@ struct ContentView: View {
 }
 
 private struct CharacterCreationView: View {
-    let onComplete: (CharacterCreationProfile) -> Void
+    let onComplete: (CharacterCreationProfile, CampaignDifficulty) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appLanguage) private var language
     @State private var name = ""
     @State private var selectedType: CharacterType = .vanguard
     @State private var selectedAbilities: [String] = []
+    @State private var selectedDifficulty: CampaignDifficulty = .easy
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -289,6 +293,19 @@ private struct CharacterCreationView: View {
                         }
                     }
 
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Difficulty").font(.headline)
+                        Picker("Difficulty", selection: $selectedDifficulty) {
+                            ForEach(CampaignDifficulty.allCases) { difficulty in
+                                Text(difficulty.localizedDisplayName(in: language)).tag(difficulty)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        Text(selectedDifficulty.localizedDescription(in: language))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Ready to enter the realm", systemImage: "sparkles")
                             .font(.headline)
@@ -303,7 +320,7 @@ private struct CharacterCreationView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 Button {
-                    onComplete(CharacterCreationProfile(name: cleanedName, type: selectedType, abilities: selectedAbilities))
+                    onComplete(CharacterCreationProfile(name: cleanedName, type: selectedType, abilities: selectedAbilities), selectedDifficulty)
                     dismiss()
                 } label: {
                     Text("Enter the Realm")
@@ -369,6 +386,21 @@ private struct CampaignIntroView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color.indigo.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Difficulty", systemImage: "dial.medium")
+                            .font(.headline)
+                            .foregroundStyle(.indigo)
+                        Text(campaign.difficulty.localizedDisplayName(in: language))
+                            .font(.subheadline.weight(.semibold))
+                        Text(campaign.difficulty.localizedDescription(in: language))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 16))
 
                     IntroSection(icon: "text.bubble.fill", title: "How to play", text: "Describe what you want to do in ordinary language. Talk to people, investigate places, travel along connected paths, use your items, or take a risk. The Dungeon Master interprets your intent, the rules resolve the consequences, and the world remembers what happens.")

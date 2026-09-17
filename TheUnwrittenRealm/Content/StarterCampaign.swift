@@ -1,7 +1,7 @@
 import Foundation
 
 public enum StarterCampaign {
-    public static func make(profile: CharacterCreationProfile = .default) -> CampaignState {
+    public static func make(profile: CharacterCreationProfile = .default, difficulty: CampaignDifficulty = .easy) -> CampaignState {
         let locations = [
             "tavern": Location(id: "tavern", name: "The Lantern & Lark", description: "A warm, crowded tavern where rain ticks against the shutters.", exits: ["square", "blacksmith"], npcIDs: ["mira", "brom"]),
             "square": Location(id: "square", name: "Village Square", description: "A rain-dark square dominated by a dry fountain and a watch post.", exits: ["tavern", "old_road", "forest_path"], npcIDs: ["elian"]),
@@ -28,7 +28,7 @@ public enum StarterCampaign {
                                         Item(id: "healing_potion", name: "Healing potion", description: "Restores a little health.", usable: true),
                                         Item(id: "old_coin", name: "Old silver coin", description: "Stamped with a crescent moon.", usable: false)
                                      ], characterType: profile.type, abilities: profile.abilities)
-        return CampaignState(title: "The Moon Beneath the Hill", player: player, currentLocationID: "tavern",
+        return CampaignState(title: "The Moon Beneath the Hill", difficulty: difficulty, player: player, currentLocationID: "tavern",
                              locations: locations, npcs: npcs, quests: [
                                 "moon_vault": Quest(id: "moon_vault", title: "The Moon Beneath the Hill", summary: "Reach the Sunken Vault before the trail goes cold.", status: .active, objective: "Find a way into the Sunken Vault.")
                              ], recentTurns: [ConversationEntry(speaker: .narrator, text: "Rain whispers over the Lantern & Lark. Mira Vale slides a damp map across the table. ‘The vault is real,’ she says. ‘And someone is already looking for it.’")])

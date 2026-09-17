@@ -22,7 +22,7 @@ Translations live in `TheUnwrittenRealm/Localization/<language>.lproj/Localizabl
 
 1. Open The Unwritten Realm.
 2. Tap **Create Your Character**.
-3. Choose a name, type, and up to two signature abilities.
+3. Choose a name, type, up to two signature abilities, and a difficulty.
 4. Read the setting, story, and opening scene in the introduction.
 5. Read the opening scene and the available paths at your current location.
 
@@ -39,6 +39,8 @@ Type an action in **What do you do?** and tap the arrow button. Use natural lang
 - `Rest by the fire.`
 
 The game may ask for an ability check. The result, including critical successes and failures, becomes part of the story and changes the campaign state when appropriate.
+
+Campaign difficulty changes the target values for ability checks and attacks. **Easy** lowers targets by 2; **Difficult** raises them by 2. Natural 1s and natural 20s remain critical outcomes in either mode. Co-op hosts choose the difficulty before starting the session, and all players receive it as part of the authoritative campaign state.
 
 ### Explore the world
 

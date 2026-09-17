@@ -85,3 +85,27 @@ public extension CharacterAbility {
         AppLocalization.string(description, language: language)
     }
 }
+
+public extension CampaignDifficulty {
+    var localizedDisplayNameKey: String {
+        switch self {
+        case .easy: return "Easy"
+        case .difficult: return "Difficult"
+        }
+    }
+
+    var localizedDescriptionKey: String {
+        switch self {
+        case .easy: return "Lower target values give you more room to experiment."
+        case .difficult: return "Higher target values make risky actions less forgiving."
+        }
+    }
+
+    func localizedDisplayName(in language: AppLanguage) -> String {
+        AppLocalization.string(localizedDisplayNameKey, language: language)
+    }
+
+    func localizedDescription(in language: AppLanguage) -> String {
+        AppLocalization.string(localizedDescriptionKey, language: language)
+    }
+}

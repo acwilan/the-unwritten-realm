@@ -95,11 +95,12 @@ public struct RulesEngine: Sendable {
         case .attack: attribute = .might; difficulty = 12
         default: attribute = .finesse; difficulty = 10
         }
+        let targetDifficulty = state.difficulty.adjustedTarget(difficulty)
         let roll = random.nextInt(in: 1...20)
         let modifier = state.player.modifier(for: attribute)
         let total = roll + modifier
-        let outcome: CheckOutcome = roll == 1 ? .criticalFailure : roll == 20 ? .criticalSuccess : total >= difficulty ? .success : .failure
-        let check = SkillCheck(attribute: attribute, roll: roll, modifier: modifier, difficulty: difficulty, total: total, outcome: outcome)
+        let outcome: CheckOutcome = roll == 1 ? .criticalFailure : roll == 20 ? .criticalSuccess : total >= targetDifficulty ? .success : .failure
+        let check = SkillCheck(attribute: attribute, roll: roll, modifier: modifier, difficulty: targetDifficulty, total: total, outcome: outcome)
         var events = [GameEvent(kind: .skillCheckResolved, value: total, text: "\(attribute.rawValue.capitalized) check: \(check.label) — \(outcome.rawValue).")]
         var explanation = check.outcome == .success || check.outcome == .criticalSuccess ? "The attempt works." : "The attempt falls short."
         switch (action.intent, outcome) {

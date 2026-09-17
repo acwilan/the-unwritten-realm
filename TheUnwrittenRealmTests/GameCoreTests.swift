@@ -46,6 +46,25 @@ final class GameCoreTests: XCTestCase {
         XCTAssertTrue(result.events.contains(where: { $0.kind == GameEventKind.skillCheckResolved }))
     }
 
+    func testCampaignDifficultyAdjustsSinglePlayerTarget() {
+        let action = InterpretedAction(intent: .investigate, approach: "inspect the map", desiredOutcome: "learn something")
+
+        var easyState = StarterCampaign.make(difficulty: .easy)
+        var easyEngine = RulesEngine()
+        var easyRandom: any RandomSource = SequenceRandomSource([9])
+        let easyResult = easyEngine.resolve(action, in: easyState, random: &easyRandom)
+
+        var difficultState = StarterCampaign.make(difficulty: .difficult)
+        var difficultEngine = RulesEngine()
+        var difficultRandom: any RandomSource = SequenceRandomSource([9])
+        let difficultResult = difficultEngine.resolve(action, in: difficultState, random: &difficultRandom)
+
+        XCTAssertEqual(easyResult.check?.difficulty, 10)
+        XCTAssertEqual(easyResult.check?.outcome, .success)
+        XCTAssertEqual(difficultResult.check?.difficulty, 14)
+        XCTAssertEqual(difficultResult.check?.outcome, .failure)
+    }
+
     func testMissingItemCannotMutateInventory() {
         let state = StarterCampaign.make()
         var engine = RulesEngine()
@@ -184,6 +203,21 @@ final class GameCoreTests: XCTestCase {
         let stale = await runtime.receive(CoopPlayerIntentSubmission(campaignID: initial.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: 0, text: "inspect again"))
         XCTAssertFalse(stale.accepted)
         XCTAssertTrue(stale.reason?.contains("out of date") == true)
+    }
+
+    func testCampaignDifficultyAdjustsCoopTarget() async {
+        let easy = CoopStarterCampaign.make(difficulty: .easy)
+        let difficult = CoopStarterCampaign.make(difficulty: .difficult)
+        let easyRuntime = HostGameRuntime(state: easy, dice: ScriptedCoopDice([9]))
+        let difficultRuntime = HostGameRuntime(state: difficult, dice: ScriptedCoopDice([9]))
+
+        _ = await easyRuntime.receive(CoopPlayerIntentSubmission(campaignID: easy.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: 0, text: "inspect the bell"))
+        _ = await difficultRuntime.receive(CoopPlayerIntentSubmission(campaignID: difficult.campaignID, playerID: CoopStarterCampaign.hostPlayerID, baseRevision: 0, text: "inspect the bell"))
+
+        let easySnapshot = await easyRuntime.snapshot()
+        let difficultSnapshot = await difficultRuntime.snapshot()
+        XCTAssertTrue(easySnapshot.world.facts.contains("A successful insight check revealed progress."))
+        XCTAssertFalse(difficultSnapshot.world.facts.contains("A successful insight check revealed progress."))
     }
 
     func testCoopProjectionIncludesOpeningNarration() async {

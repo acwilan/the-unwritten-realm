@@ -36,8 +36,8 @@ public final class GameSession: ObservableObject {
         #endif
     }
 
-    public func startNewCampaign(profile: CharacterCreationProfile = .default, language: AppLanguage = .current) {
-        campaign = StarterCampaign.make(profile: profile)
+    public func startNewCampaign(profile: CharacterCreationProfile = .default, difficulty: CampaignDifficulty = .easy, language: AppLanguage = .current) {
+        campaign = StarterCampaign.make(profile: profile, difficulty: difficulty)
         do { try store.save(campaign!) } catch {
             errorMessage = AppLocalization.string("Could not save the new campaign.", language: language)
         }

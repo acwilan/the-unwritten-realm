@@ -158,9 +158,10 @@ public struct CoopEncounterState: Codable, Equatable, Sendable {
 }
 
 public struct CoopCampaignState: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
     public var schemaVersion: Int
     public let campaignID: CoopCampaignID
+    public var difficulty: CampaignDifficulty
     public var revision: UInt64
     public var phase: CoopPlayPhase
     public var party: CoopPartyState
@@ -170,10 +171,29 @@ public struct CoopCampaignState: Codable, Equatable, Sendable {
     public var rngState: UInt64
 
     public init(campaignID: CoopCampaignID = UUID(), revision: UInt64 = 0, phase: CoopPlayPhase = .freePlay,
+                difficulty: CampaignDifficulty = .easy,
                 party: CoopPartyState, world: CoopWorldState, encounter: CoopEncounterState? = nil,
                 quests: [String: String] = [:], rngState: UInt64 = 0x9E3779B97F4A7C15, schemaVersion: Int = currentSchemaVersion) {
-        self.schemaVersion = schemaVersion; self.campaignID = campaignID; self.revision = revision; self.phase = phase
+        self.schemaVersion = schemaVersion; self.campaignID = campaignID; self.difficulty = difficulty; self.revision = revision; self.phase = phase
         self.party = party; self.world = world; self.encounter = encounter; self.quests = quests; self.rngState = rngState
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, campaignID, difficulty, revision, phase, party, world, encounter, quests, rngState
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = max(try container.decode(Int.self, forKey: .schemaVersion), CoopCampaignState.currentSchemaVersion)
+        campaignID = try container.decode(CoopCampaignID.self, forKey: .campaignID)
+        difficulty = try container.decodeIfPresent(CampaignDifficulty.self, forKey: .difficulty) ?? .easy
+        revision = try container.decode(UInt64.self, forKey: .revision)
+        phase = try container.decode(CoopPlayPhase.self, forKey: .phase)
+        party = try container.decode(CoopPartyState.self, forKey: .party)
+        world = try container.decode(CoopWorldState.self, forKey: .world)
+        encounter = try container.decodeIfPresent(CoopEncounterState.self, forKey: .encounter)
+        quests = try container.decode([String: String].self, forKey: .quests)
+        rngState = try container.decode(UInt64.self, forKey: .rngState)
     }
 }
 

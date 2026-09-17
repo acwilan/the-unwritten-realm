@@ -1,5 +1,23 @@
 import Foundation
 
+public enum CampaignDifficulty: String, Codable, CaseIterable, Identifiable, Sendable {
+    case easy
+    case difficult
+
+    public var id: String { rawValue }
+
+    public var targetAdjustment: Int {
+        switch self {
+        case .easy: return -2
+        case .difficult: return 2
+        }
+    }
+
+    public func adjustedTarget(_ baseTarget: Int) -> Int {
+        baseTarget + targetAdjustment
+    }
+}
+
 public struct PlayerCommand: Codable, Equatable, Sendable {
     public let id: UUID
     public let rawText: String
@@ -299,10 +317,11 @@ public struct ConversationEntry: Codable, Identifiable, Equatable, Sendable {
 }
 
 public struct CampaignState: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
     public var schemaVersion: Int
     public var campaignID: UUID
     public var title: String
+    public var difficulty: CampaignDifficulty
     public var player: PlayerCharacter
     public var currentLocationID: String
     public var locations: [String: Location]
@@ -315,6 +334,7 @@ public struct CampaignState: Codable, Equatable, Sendable {
     public var minutesElapsed: Int
 
     public init(schemaVersion: Int = CampaignState.currentSchemaVersion, campaignID: UUID = UUID(), title: String,
+                difficulty: CampaignDifficulty = .easy,
                 player: PlayerCharacter, currentLocationID: String, locations: [String: Location],
                 npcs: [String: NPC], quests: [String: Quest], discoveredFacts: [String] = [],
                 recentTurns: [ConversationEntry] = [], eventLog: [GameEvent] = [], turnNumber: Int = 0,
@@ -322,6 +342,7 @@ public struct CampaignState: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
         self.campaignID = campaignID
         self.title = title
+        self.difficulty = difficulty
         self.player = player
         self.currentLocationID = currentLocationID
         self.locations = locations
@@ -332,6 +353,29 @@ public struct CampaignState: Codable, Equatable, Sendable {
         self.eventLog = eventLog
         self.turnNumber = turnNumber
         self.minutesElapsed = minutesElapsed
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, campaignID, title, difficulty, player, currentLocationID, locations, npcs, quests
+        case discoveredFacts, recentTurns, eventLog, turnNumber, minutesElapsed
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = max(try container.decode(Int.self, forKey: .schemaVersion), CampaignState.currentSchemaVersion)
+        campaignID = try container.decode(UUID.self, forKey: .campaignID)
+        title = try container.decode(String.self, forKey: .title)
+        difficulty = try container.decodeIfPresent(CampaignDifficulty.self, forKey: .difficulty) ?? .easy
+        player = try container.decode(PlayerCharacter.self, forKey: .player)
+        currentLocationID = try container.decode(String.self, forKey: .currentLocationID)
+        locations = try container.decode([String: Location].self, forKey: .locations)
+        npcs = try container.decode([String: NPC].self, forKey: .npcs)
+        quests = try container.decode([String: Quest].self, forKey: .quests)
+        discoveredFacts = try container.decode([String].self, forKey: .discoveredFacts)
+        recentTurns = try container.decode([ConversationEntry].self, forKey: .recentTurns)
+        eventLog = try container.decode([GameEvent].self, forKey: .eventLog)
+        turnNumber = try container.decode(Int.self, forKey: .turnNumber)
+        minutesElapsed = try container.decode(Int.self, forKey: .minutesElapsed)
     }
 
     public var currentLocation: Location? { locations[currentLocationID] }

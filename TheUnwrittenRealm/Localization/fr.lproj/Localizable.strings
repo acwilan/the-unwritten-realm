@@ -5,6 +5,12 @@
 "German" = "Allemand";
 "Italian" = "Italien";
 "Language" = "Langue";
+"Difficulty" = "Difficulté";
+"Easy" = "Facile";
+"Difficult" = "Difficile";
+"Lower target values give you more room to experiment." = "Des valeurs cibles plus basses vous donnent davantage de marge pour expérimenter.";
+"Higher target values make risky actions less forgiving." = "Des valeurs cibles plus élevées rendent les actions risquées moins indulgentes.";
+"Difficulty · %@" = "Difficulté · %@";
 "Start a new campaign?" = "Commencer une nouvelle campagne ?";
 "Customize Character" = "Personnaliser le personnage";
 "Cancel" = "Annuler";

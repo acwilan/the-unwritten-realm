@@ -9,7 +9,7 @@ public enum CoopStarterCampaign {
         payload: .narration(text: "Rain ticks against the shutters while a bell sounds beneath the floorboards. The night is waiting for the party to decide what happens next.")
     )
 
-    public static func make() -> CoopCampaignState {
+    public static func make(difficulty: CampaignDifficulty = .easy) -> CoopCampaignState {
         let scenes: [CoopSceneID: CoopScene] = [
             "inn": CoopScene(id: "inn", name: "The Lantern & Lark", description: "Rain ticks against the shutters while a bell sounds beneath the floorboards.", exits: ["cellar"], landmarks: ["the hearth", "the innkeeper's desk"]),
             "cellar": CoopScene(id: "cellar", name: "The Cellar", description: "Barrels crowd a damp cellar. A sealed passage waits behind the oldest rack.", exits: ["inn", "passage"], landmarks: ["the old rack", "a cracked bell"]),
@@ -23,6 +23,6 @@ public enum CoopStarterCampaign {
         let companionActor = CoopActor(id: companionCharacterID, name: companion.name, kind: .player, sceneID: "inn", zone: .nearby, hitPoints: companion.hitPoints, maxHitPoints: companion.maxHitPoints, defense: companion.defense)
         let bell = CoopActor(id: UUID(uuidString: "00000000-0000-0000-0000-000000000201")!, name: "Bell Wraith", kind: .hostile, sceneID: "shrine", zone: .engaged, hitPoints: 8, maxHitPoints: 8, defense: 12)
         let world = CoopWorldState(currentSceneID: "inn", scenes: scenes, actors: [hostActor.id: hostActor, companionActor.id: companionActor, bell.id: bell])
-        return CoopCampaignState(party: CoopPartyState(players: [host.id: host], characters: [wayfarer.id: wayfarer, companion.id: companion], playerByCharacter: [wayfarer.id: host.id]), world: world, quests: ["bell": "Discover why the bell beneath the inn has started ringing."])
+        return CoopCampaignState(difficulty: difficulty, party: CoopPartyState(players: [host.id: host], characters: [wayfarer.id: wayfarer, companion.id: companion], playerByCharacter: [wayfarer.id: host.id]), world: world, quests: ["bell": "Discover why the bell beneath the inn has started ringing."])
     }
 }

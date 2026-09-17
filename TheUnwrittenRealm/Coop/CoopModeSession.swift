@@ -24,8 +24,8 @@ public final class CoopModeSession: ObservableObject {
         self.localPlayerID = localPlayerID ?? (try? CoopInstallationIdentity().installationID) ?? UUID()
     }
 
-    public func host() {
-        let campaign = CoopStarterCampaign.make()
+    public func host(difficulty: CampaignDifficulty = .easy) {
+        let campaign = CoopStarterCampaign.make(difficulty: difficulty)
         localPlayerID = CoopStarterCampaign.hostPlayerID
         state = campaign; isHost = true; isBrowsing = false
         let interpreter = FallbackCoopInterpreter(primary: AIProviderCoopInterpreter(provider: GameSession.defaultAI()), fallback: DeterministicCoopInterpreter())
