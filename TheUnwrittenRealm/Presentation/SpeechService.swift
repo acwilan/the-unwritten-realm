@@ -1,14 +1,36 @@
 import AVFAudio
 import SwiftUI
 
+enum VoicePreference: String, CaseIterable, Identifiable {
+    case deepMale
+    case neutral
+    case warmFemale
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .deepMale: return "Deep male"
+        case .neutral: return "Neutral"
+        case .warmFemale: return "Warm female"
+        }
+    }
+}
+
 @MainActor
 final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     @Published private(set) var speakingEntryID: UUID?
+    @Published var voicePreference: VoicePreference {
+        didSet { UserDefaults.standard.set(voicePreference.rawValue, forKey: Self.voicePreferenceKey) }
+    }
 
     private let synthesizer = AVSpeechSynthesizer()
     private var activeUtteranceID: ObjectIdentifier?
+    private static let voicePreferenceKey = "speech.voicePreference"
 
     override init() {
+        let storedVoice = UserDefaults.standard.string(forKey: Self.voicePreferenceKey)
+        voicePreference = VoicePreference(rawValue: storedVoice ?? "") ?? .deepMale
         super.init()
         synthesizer.delegate = self
     }
@@ -26,16 +48,31 @@ final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesizerDelega
         stop()
         configureAudioSession()
 
-        let profile = VoiceCatalog.profile(for: entry.speakerName)
-        let utterance = AVSpeechUtterance(string: entry.text)
+        speak(text: entry.text, entryID: entry.id, speakerName: entry.speakerName)
+    }
+
+    func speak(text: String, entryID: UUID? = nil, speakerName: String? = nil) {
+        stop()
+        configureAudioSession()
+
+        let profile = VoiceCatalog.profile(for: speakerName, preference: voicePreference)
+        let utterance = AVSpeechUtterance(string: text)
         utterance.voice = VoiceCatalog.voice(for: profile)
         utterance.rate = profile.rate
         utterance.pitchMultiplier = profile.pitch
         utterance.volume = 1.0
 
         activeUtteranceID = ObjectIdentifier(utterance)
-        speakingEntryID = entry.id
+        speakingEntryID = entryID
         synthesizer.speak(utterance)
+    }
+
+    func toggle(text: String, entryID: UUID? = nil, speakerName: String? = nil) {
+        if entryID != nil, speakingEntryID == entryID {
+            stop()
+        } else {
+            speak(text: text, entryID: entryID, speakerName: speakerName)
+        }
     }
 
     func stop() {
@@ -79,7 +116,16 @@ private struct VoiceProfile {
 }
 
 private enum VoiceCatalog {
-    static func profile(for speakerName: String?) -> VoiceProfile {
+    static func profile(for speakerName: String?, preference: VoicePreference) -> VoiceProfile {
+        switch preference {
+        case .deepMale:
+            return VoiceProfile(preferredNames: ["Daniel", "Aaron", "Alex", "Oliver"], pitch: 0.78, rate: 0.44)
+        case .warmFemale:
+            return VoiceProfile(preferredNames: ["Samantha", "Ava", "Karen", "Moira"], pitch: 1.02, rate: 0.46)
+        case .neutral:
+            break
+        }
+
         let name = speakerName?.lowercased() ?? ""
         if name.contains("mira") {
             return VoiceProfile(preferredNames: ["Samantha", "Ava", "Karen"], pitch: 1.08, rate: 0.48)

@@ -28,10 +28,26 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The Unwritten Realm uses your local network to find and connect to nearby co-op players.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The Unwritten Realm uses the microphone so you can tell the Dungeon Master what to do.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>The Unwritten Realm turns your spoken actions into commands for the Dungeon Master.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>

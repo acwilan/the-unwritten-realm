@@ -12,8 +12,11 @@ struct ContentView: View {
     @State private var showingCampaignIntro = false
     @State private var pendingCharacterProfile: CharacterCreationProfile?
     @State private var pendingCampaignDifficulty: CampaignDifficulty = .easy
+    @State private var showingVoiceSettings = false
+    @State private var lastObservedEntryID: UUID?
     @FocusState private var inputIsFocused: Bool
     @StateObject private var speech = SpeechService()
+    @StateObject private var voiceInput = VoiceInputService()
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,6 +37,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showingCampaignDescription) {
             CampaignDescriptionView()
+        }
+        .sheet(isPresented: $showingVoiceSettings) {
+            VoiceSettingsView(speech: speech)
         }
         .sheet(isPresented: $showingCoop) { CoopModeView() }
         .fullScreenCover(isPresented: $showingCharacterCreation, onDismiss: {
@@ -61,6 +67,11 @@ struct ContentView: View {
         .alert("Something went wrong", isPresented: Binding(get: { session.errorMessage != nil }, set: { if !$0 { session.errorMessage = nil } })) {
             Button("OK") { session.errorMessage = nil }
         } message: { Text(session.errorMessage ?? "") }
+        .onChange(of: voiceInput.finalTranscript) { _, transcript in
+            guard let transcript else { return }
+            voiceInput.clearFinalTranscript()
+            session.submit(transcript)
+        }
     }
 
     private var welcomeView: some View {
@@ -69,7 +80,7 @@ struct ContentView: View {
             Image(systemName: "moon.stars.fill").font(.system(size: 64)).foregroundStyle(.indigo)
             Text("The Moon Beneath the Hill").font(.largeTitle.bold()).multilineTextAlignment(.center)
             Text("A living story where your words become the next move.").font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Create Your Character", systemImage: "person.fill.badge.plus") { showingCharacterCreation = true }.buttonStyle(.borderedProminent)
+            Button("New Campaign", systemImage: "person.fill.badge.plus") { showingCharacterCreation = true }.buttonStyle(.borderedProminent)
             Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }.buttonStyle(.bordered)
             Spacer()
         }.padding(28)
@@ -85,6 +96,7 @@ struct ContentView: View {
                 Menu {
                     Button("Journal", systemImage: "book.closed") { showingJournal = true }
                     Button("Campaign Description", systemImage: "text.book.closed") { showingCampaignDescription = true }
+                    Button("DM Voice", systemImage: "waveform") { showingVoiceSettings = true }
                     Button("Local Co-op", systemImage: "person.3.fill") { showingCoop = true }
                     Button("New Campaign", systemImage: "plus.circle", role: .destructive) { showingNewCampaignConfirmation = true }
                 } label: {
@@ -159,14 +171,40 @@ struct ContentView: View {
                         session.submit(value)
                     } label: { Image(systemName: "arrow.up.circle.fill").font(.title) }
                     .disabled(session.isProcessing || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button {
+                        inputIsFocused = false
+                        voiceInput.toggleRecording()
+                    } label: {
+                        Image(systemName: voiceInput.isRecording ? "stop.circle.fill" : "mic.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(voiceInput.isRecording ? .red : .indigo)
+                    }
+                    .disabled(session.isProcessing)
                 }
                 .padding()
+                if voiceInput.isRecording {
+                    Label("Listening… tap the microphone again when you’re done", systemImage: "waveform")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .padding(.bottom, 6)
+                }
             }
             .background(.regularMaterial)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .contentShape(Rectangle())
         .onTapGesture { inputIsFocused = false }
+        .onAppear {
+            lastObservedEntryID = campaign.recentTurns.last?.id
+        }
+        .onChange(of: campaign.recentTurns.last?.id) { _, entryID in
+            guard !showingCampaignIntro, let entryID, entryID != lastObservedEntryID else { return }
+            lastObservedEntryID = entryID
+            guard let entry = campaign.recentTurns.last, entry.speaker != .player else { return }
+            speech.speak(text: entry.text, entryID: entry.id, speakerName: entry.speakerName)
+        }
         .onDisappear { speech.stop() }
     }
 }
@@ -348,6 +386,7 @@ private struct CampaignIntroView: View {
     let campaign: CampaignState
     let onContinue: () -> Void
     @Environment(\.appLanguage) private var language
+    @StateObject private var speech = SpeechService()
 
     var body: some View {
         NavigationStack {
@@ -414,6 +453,14 @@ private struct CampaignIntroView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+
+                    Button {
+                        speech.speak(text: introductionVoiceover, speakerName: "Dungeon Master")
+                    } label: {
+                        Label("Repeat read aloud", systemImage: "speaker.wave.2.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
                 .padding(24)
                 .padding(.bottom, 12)
@@ -433,12 +480,51 @@ private struct CampaignIntroView: View {
             }
             .navigationTitle("Before You Begin")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                speech.speak(text: introductionVoiceover, speakerName: "Dungeon Master")
+            }
+            .onDisappear { speech.stop() }
+        }
+    }
+
+    private var introductionVoiceover: String {
+        let description = "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill."
+        let opening = campaign.recentTurns.first?.text ?? "Your story begins tonight."
+        return "\(description) \(opening)"
+    }
+}
+
+private struct VoiceSettingsView: View {
+    @ObservedObject var speech: SpeechService
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Dungeon Master voice") {
+                    Picker("Voice", selection: $speech.voicePreference) {
+                        ForEach(VoicePreference.allCases) { preference in
+                            Text(preference.displayName).tag(preference)
+                        }
+                    }
+                    Text("Deep male uses Daniel, Aaron, or Alex when installed, with a lower pitch and measured pace.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Voice")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
 
 private struct CampaignDescriptionView: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var speech = SpeechService()
 
     var body: some View {
         NavigationStack {
@@ -453,6 +539,10 @@ private struct CampaignDescriptionView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .onAppear {
+                speech.speak(text: "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden. In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill.", speakerName: "Dungeon Master")
+            }
+            .onDisappear { speech.stop() }
         }
     }
 }
