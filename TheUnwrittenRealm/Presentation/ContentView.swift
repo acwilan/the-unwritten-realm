@@ -13,7 +13,6 @@ struct ContentView: View {
     @State private var pendingCharacterProfile: CharacterCreationProfile?
     @State private var pendingCampaignDifficulty: CampaignDifficulty = .easy
     @State private var showingVoiceSettings = false
-    @State private var lastObservedEntryID: UUID?
     @FocusState private var inputIsFocused: Bool
     @StateObject private var speech = SpeechService()
     @StateObject private var voiceInput = VoiceInputService()
@@ -196,15 +195,6 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .contentShape(Rectangle())
         .onTapGesture { inputIsFocused = false }
-        .onAppear {
-            lastObservedEntryID = campaign.recentTurns.last?.id
-        }
-        .onChange(of: campaign.recentTurns.last?.id) { _, entryID in
-            guard !showingCampaignIntro, let entryID, entryID != lastObservedEntryID else { return }
-            lastObservedEntryID = entryID
-            guard let entry = campaign.recentTurns.last, entry.speaker != .player else { return }
-            speech.speak(text: entry.text, entryID: entry.id, speakerName: entry.speakerName)
-        }
         .onDisappear { speech.stop() }
     }
 }
@@ -457,7 +447,7 @@ private struct CampaignIntroView: View {
                     Button {
                         speech.speak(text: introductionVoiceover, speakerName: "Dungeon Master")
                     } label: {
-                        Label("Repeat read aloud", systemImage: "speaker.wave.2.fill")
+                        Label("Read aloud", systemImage: "speaker.wave.2.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -480,9 +470,6 @@ private struct CampaignIntroView: View {
             }
             .navigationTitle("Before You Begin")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                speech.speak(text: introductionVoiceover, speakerName: "Dungeon Master")
-            }
             .onDisappear { speech.stop() }
         }
     }
@@ -529,8 +516,18 @@ private struct CampaignDescriptionView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                CampaignDescriptionSections()
-                    .padding(24)
+                VStack(alignment: .leading, spacing: 24) {
+                    CampaignDescriptionSections()
+
+                    Button {
+                        speech.speak(text: descriptionVoiceover, speakerName: "Dungeon Master")
+                    } label: {
+                        Label("Read aloud", systemImage: "speaker.wave.2.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding(24)
             }
             .navigationTitle("Campaign Description")
             .navigationBarTitleDisplayMode(.inline)
@@ -539,11 +536,12 @@ private struct CampaignDescriptionView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .onAppear {
-                speech.speak(text: "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden. In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill.", speakerName: "Dungeon Master")
-            }
             .onDisappear { speech.stop() }
         }
+    }
+
+    private var descriptionVoiceover: String {
+        "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden. In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill."
     }
 }
 
