@@ -79,7 +79,10 @@ public struct RulesEngine: Sendable {
         case .rest:
             return ActionResolution(isValid: true, events: [GameEvent(kind: .characterHealed, value: 2), GameEvent(kind: .timeAdvanced, value: 30)], explanation: "You take a brief rest.")
 
-        case .explore, .social, .deceive, .persuade, .investigate, .attack, .help, .unknown:
+        case .unknown:
+            return ActionResolution(isValid: false, explanation: "I’m not sure how to resolve that as an action yet. Try describing a conversation, investigation, journey, item use, or risky attempt.")
+
+        case .explore, .social, .deceive, .persuade, .investigate, .attack, .help:
             return resolveCheck(action, in: state, random: &random)
         }
     }

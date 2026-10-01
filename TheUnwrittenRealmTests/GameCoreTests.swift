@@ -185,6 +185,31 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(action.targetID, "mira")
     }
 
+    func testFakeProviderDoesNotTurnUnsupportedInputIntoExploration() async throws {
+        let campaign = StarterCampaign.make()
+        let context = ContextBuilder().build(for: campaign)
+        let action = try await FakeAIProvider().interpret(
+            command: PlayerCommand(rawText: "I pull down my pants and pee in the floor"),
+            context: context
+        )
+
+        XCTAssertEqual(action.intent, .unknown)
+    }
+
+    func testUnknownActionDoesNotRollOrChangeTheWorld() {
+        var state = StarterCampaign.make()
+        var engine = RulesEngine()
+        let action = InterpretedAction(intent: .unknown, approach: "do something unsupported", desiredOutcome: "anything")
+        var random: any RandomSource = SequenceRandomSource([20])
+
+        let result = engine.resolve(action, in: state, random: &random)
+
+        XCTAssertFalse(result.isValid)
+        XCTAssertNil(result.check)
+        XCTAssertTrue(result.events.isEmpty)
+        XCTAssertFalse(result.explanation.isEmpty)
+    }
+
     func testCoopHostAuthoritativelyRejectsStaleAndDuplicateCommands() async throws {
         let initial = CoopStarterCampaign.make()
         let runtime = HostGameRuntime(state: initial, dice: ScriptedCoopDice([20]))
