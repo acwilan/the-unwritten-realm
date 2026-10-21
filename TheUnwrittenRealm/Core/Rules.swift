@@ -11,6 +11,8 @@ public struct SkillCheck: Codable, Equatable, Sendable {
     public let outcome: CheckOutcome
 
     public var label: String { "d20 \(roll) + \(modifier) = \(total) vs. \(difficulty)" }
+
+    public func label(in language: AppLanguage) -> String { label }
 }
 
 public protocol RandomSource: Sendable {
@@ -54,33 +56,34 @@ public struct RulesEngine: Sendable {
     public init() {}
 
     public mutating func resolve(_ action: InterpretedAction, in state: CampaignState, random: inout any RandomSource) -> ActionResolution {
+        let language = state.language
         switch action.intent {
         case .travel:
             guard let destinationID = action.destinationID, state.locations[state.currentLocationID]?.exits.contains(destinationID) == true,
                   let destination = state.locations[destinationID] else {
-                return ActionResolution(isValid: false, explanation: "That destination is not reachable from here.")
+                return ActionResolution(isValid: false, explanation: AppLocalization.string("That destination is not reachable from here.", language: language))
             }
             return ActionResolution(isValid: true, events: [
                 GameEvent(kind: .locationChanged, targetID: destination.id, text: destination.name),
                 GameEvent(kind: .timeAdvanced, value: 10)
-            ], explanation: "You travel to \(destination.name).")
+            ], explanation: AppLocalization.format("You travel to %@.", language: language, destination.name))
 
         case .useItem:
             guard let name = action.referencedItemName,
                   let item = state.player.inventory.first(where: { $0.name.localizedCaseInsensitiveContains(name) || $0.id == name }) else {
-                return ActionResolution(isValid: false, explanation: "You do not have \(action.referencedItemName ?? "that item").")
+                return ActionResolution(isValid: false, explanation: AppLocalization.format("You do not have %@.", language: language, action.referencedItemName ?? AppLocalization.string("that item", language: language)))
             }
-            guard item.usable else { return ActionResolution(isValid: false, explanation: "That item cannot be used in that way.") }
+            guard item.usable else { return ActionResolution(isValid: false, explanation: AppLocalization.string("That item cannot be used in that way.", language: language)) }
             let heal = item.id.contains("potion") ? 5 : 0
             var events = [GameEvent(kind: .itemRemoved, targetID: item.id, text: item.name)]
             if heal > 0 { events.append(GameEvent(kind: .characterHealed, value: heal)) }
-            return ActionResolution(isValid: true, events: events, explanation: "You use the \(item.name).")
+            return ActionResolution(isValid: true, events: events, explanation: AppLocalization.format("You use the %@.", language: language, item.name))
 
         case .rest:
-            return ActionResolution(isValid: true, events: [GameEvent(kind: .characterHealed, value: 2), GameEvent(kind: .timeAdvanced, value: 30)], explanation: "You take a brief rest.")
+            return ActionResolution(isValid: true, events: [GameEvent(kind: .characterHealed, value: 2), GameEvent(kind: .timeAdvanced, value: 30)], explanation: AppLocalization.string("You take a brief rest.", language: language))
 
         case .unknown:
-            return ActionResolution(isValid: false, explanation: "I’m not sure how to resolve that as an action yet. Try describing a conversation, investigation, journey, item use, or risky attempt.")
+            return ActionResolution(isValid: false, explanation: AppLocalization.string("I’m not sure how to resolve that as an action yet. Try describing a conversation, investigation, journey, item use, or risky attempt.", language: language))
 
         case .explore, .social, .deceive, .persuade, .investigate, .attack, .help:
             return resolveCheck(action, in: state, random: &random)
@@ -104,51 +107,56 @@ public struct RulesEngine: Sendable {
         let total = roll + modifier
         let outcome: CheckOutcome = roll == 1 ? .criticalFailure : roll == 20 ? .criticalSuccess : total >= targetDifficulty ? .success : .failure
         let check = SkillCheck(attribute: attribute, roll: roll, modifier: modifier, difficulty: targetDifficulty, total: total, outcome: outcome)
-        var events = [GameEvent(kind: .skillCheckResolved, value: total, text: "\(attribute.rawValue.capitalized) check: \(check.label) — \(outcome.rawValue).")]
-        var explanation = check.outcome == .success || check.outcome == .criticalSuccess ? "The attempt works." : "The attempt falls short."
+        let language = state.language
+        let outcomeText = AppLocalization.string(outcome.rawValue, language: language)
+        var events = [GameEvent(kind: .skillCheckResolved, value: total, text: AppLocalization.format("%@ check: %@ — %@.", language: language, attribute.localizedDisplayName(in: language), check.label, outcomeText))]
+        var explanation = check.outcome == .success || check.outcome == .criticalSuccess
+            ? AppLocalization.string("The attempt works.", language: language)
+            : AppLocalization.string("The attempt falls short.", language: language)
         switch (action.intent, outcome) {
-        case (.attack, .success), (.attack, .criticalSuccess): events.append(GameEvent(kind: .characterDamaged, value: outcome == .criticalSuccess ? 1 : 2, text: "The danger bites back."))
-            explanation = "Your attack lands, but the danger bites back."
+        case (.attack, .success), (.attack, .criticalSuccess): events.append(GameEvent(kind: .characterDamaged, value: outcome == .criticalSuccess ? 1 : 2, text: AppLocalization.string("The danger bites back.", language: language)))
+            explanation = AppLocalization.string("Your attack lands, but the danger bites back.", language: language)
         case (.deceive, .success), (.deceive, .criticalSuccess):
             if let target {
-                events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: "\(target.name) seems more receptive."))
-                explanation = "\(target.name) seems to believe you."
+                events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: AppLocalization.format("%@ seems more receptive.", language: language, target.name)))
+                explanation = AppLocalization.format("%@ seems to believe you.", language: language, target.name)
             }
         case (.persuade, .success), (.persuade, .criticalSuccess), (.social, .success), (.social, .criticalSuccess):
             if let target {
-                events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: "\(target.name) seems more receptive."))
+                events.append(GameEvent(kind: .npcDispositionChanged, targetID: target.id, value: 8, text: AppLocalization.format("%@ seems more receptive.", language: language, target.name)))
                 if let fact = target.knownFacts.first(where: { !state.discoveredFacts.contains($0) }) {
                     events.append(GameEvent(kind: .factDiscovered, text: fact))
-                    explanation = "\(target.name) opens up: \(fact)"
+                    explanation = AppLocalization.format("%@ opens up: %@", language: language, target.name, fact)
                 } else {
-                    explanation = "\(target.name) seems more receptive."
+                    explanation = AppLocalization.format("%@ seems more receptive.", language: language, target.name)
                 }
             }
         case (.investigate, .success), (.investigate, .criticalSuccess), (.explore, .success), (.explore, .criticalSuccess):
             if let clue = locationClue(for: state), !state.discoveredFacts.contains(clue) {
                 events.append(GameEvent(kind: .factDiscovered, text: clue))
-                explanation = "You uncover a clue: \(clue)"
+                explanation = AppLocalization.format("You uncover a clue: %@", language: language, clue)
             } else {
-                explanation = "You find no new clue, but your understanding of the area sharpens."
+                explanation = AppLocalization.string("You find no new clue, but your understanding of the area sharpens.", language: language)
             }
         case (.help, .success), (.help, .criticalSuccess):
-            events.append(GameEvent(kind: .factDiscovered, text: "The immediate problem has a workable weakness."))
-            explanation = "You identify a workable weakness in the immediate problem."
+            events.append(GameEvent(kind: .factDiscovered, text: AppLocalization.string("The immediate problem has a workable weakness.", language: language)))
+            explanation = AppLocalization.string("You identify a workable weakness in the immediate problem.", language: language)
         default: break
         }
         return ActionResolution(isValid: true, check: check, events: events, explanation: explanation, targetNPCID: target?.id)
     }
 
     private func locationClue(for state: CampaignState) -> String? {
+        let l = { (key: String) in AppLocalization.string(key, language: state.language) }
         switch state.currentLocationID {
-        case "tavern": return "Mira's map marks the Old Road as a route toward the Sunken Vault."
-        case "square": return "The watch post confirms that the Old Road leads toward the ruined chapel."
-        case "blacksmith": return "The chapel altar has a hidden mechanism."
-        case "old_road": return "The broken milestones point toward a chapel swallowed by ivy."
-        case "chapel": return "The empty reliquary bears the same crescent mark as the old silver coin."
-        case "forest_path": return "The forest path leads to a guarded rope bridge."
-        case "goblin_bridge": return "The ravine route can reach the Sunken Vault."
-        case "dungeon": return "The duke's seal is carved into the vault door."
+        case "tavern": return l("Mira's map marks the Old Road as a route toward the Sunken Vault.")
+        case "square": return l("The watch post confirms that the Old Road leads toward the ruined chapel.")
+        case "blacksmith": return l("The chapel altar has a hidden mechanism.")
+        case "old_road": return l("The broken milestones point toward a chapel swallowed by ivy.")
+        case "chapel": return l("The empty reliquary bears the same crescent mark as the old silver coin.")
+        case "forest_path": return l("The forest path leads to a guarded rope bridge.")
+        case "goblin_bridge": return l("The ravine route can reach the Sunken Vault.")
+        case "dungeon": return l("The duke's seal is carved into the vault door.")
         default: return nil
         }
     }

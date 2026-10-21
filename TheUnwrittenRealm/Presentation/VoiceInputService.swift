@@ -12,12 +12,23 @@ final class VoiceInputService: NSObject, ObservableObject, SFSpeechRecognizerDel
     var onFinalTranscript: ((String) -> Void)?
 
     private let audioEngine = AVAudioEngine()
-    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var recognizer: SFSpeechRecognizer?
+    private var language: AppLanguage
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
 
     override init() {
+        language = .current
+        recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.speechLanguageCodes.first ?? language.rawValue))
         super.init()
+        recognizer?.delegate = self
+    }
+
+    func setLanguage(_ language: AppLanguage) {
+        guard self.language != language else { return }
+        self.language = language
+        recognizer?.delegate = nil
+        recognizer = SFSpeechRecognizer(locale: Locale(identifier: language.speechLanguageCodes.first ?? language.rawValue))
         recognizer?.delegate = self
     }
 

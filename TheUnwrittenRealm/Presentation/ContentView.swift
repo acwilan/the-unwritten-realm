@@ -71,6 +71,8 @@ struct ContentView: View {
             voiceInput.clearFinalTranscript()
             session.submit(transcript)
         }
+        .onAppear { voiceInput.setLanguage(language) }
+        .onChange(of: language) { _, newLanguage in voiceInput.setLanguage(newLanguage) }
     }
 
     private var welcomeView: some View {
@@ -153,7 +155,7 @@ struct ContentView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
                 if let check = session.lastCheck {
-                    Text(AppLocalization.format("Last check · %@", language: language, check.label))
+                    Text(AppLocalization.format("Last check · %@", language: language, check.label(in: language)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.bottom, 5)
@@ -445,7 +447,7 @@ private struct CampaignIntroView: View {
                     }
 
                     Button {
-                        speech.speak(text: introductionVoiceover, speakerName: "Dungeon Master")
+                        speech.speak(text: introductionVoiceover, speakerName: "Dungeon Master", language: language)
                     } label: {
                         Label("Read aloud", systemImage: "speaker.wave.2.fill")
                             .frame(maxWidth: .infinity)
@@ -475,9 +477,10 @@ private struct CampaignIntroView: View {
     }
 
     private var introductionVoiceover: String {
-        let description = "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill."
-        let opening = campaign.recentTurns.first?.text ?? "Your story begins tonight."
-        return "\(description) \(opening)"
+        let setting = AppLocalization.string("The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden.", language: language)
+        let story = AppLocalization.string("In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill.", language: language)
+        let opening = campaign.recentTurns.first?.text ?? AppLocalization.string("Your story begins tonight.", language: language)
+        return "\(setting) \(story) \(opening)"
     }
 }
 
@@ -511,6 +514,7 @@ private struct VoiceSettingsView: View {
 
 private struct CampaignDescriptionView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguage) private var language
     @StateObject private var speech = SpeechService()
 
     var body: some View {
@@ -520,7 +524,7 @@ private struct CampaignDescriptionView: View {
                     CampaignDescriptionSections()
 
                     Button {
-                        speech.speak(text: descriptionVoiceover, speakerName: "Dungeon Master")
+                        speech.speak(text: descriptionVoiceover, speakerName: "Dungeon Master", language: language)
                     } label: {
                         Label("Read aloud", systemImage: "speaker.wave.2.fill")
                             .frame(maxWidth: .infinity)
@@ -541,7 +545,9 @@ private struct CampaignDescriptionView: View {
     }
 
     private var descriptionVoiceover: String {
-        "The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden. In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill."
+        let setting = AppLocalization.string("The Unwritten Realm is a rain-soaked frontier where old magic has gone quiet, but never truly disappeared. Villages cling to the edges of forests, forgotten roads lead to sealed ruins, and every person you meet has a reason to keep part of the truth hidden.", language: language)
+        let story = AppLocalization.string("In the village of Larkspur, a vanished duke left behind a map, a crescent-marked coin, and rumors of the Sunken Vault beneath the hill.", language: language)
+        return "\(setting) \(story)"
     }
 }
 
@@ -587,7 +593,7 @@ private struct MessageBubble: View {
                     Spacer(minLength: 8)
                     if entry.speaker != .player {
                         Button {
-                            speech.toggle(entry)
+                            speech.toggle(entry, language: language)
                         } label: {
                             Image(systemName: speech.isSpeaking(entry) ? "stop.fill" : "speaker.wave.2.fill")
                                 .font(.caption)

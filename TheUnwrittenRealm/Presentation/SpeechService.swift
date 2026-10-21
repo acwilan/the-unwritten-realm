@@ -39,7 +39,7 @@ final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesizerDelega
         speakingEntryID == entry.id
     }
 
-    func toggle(_ entry: ConversationEntry) {
+    func toggle(_ entry: ConversationEntry, language: AppLanguage = .current) {
         if isSpeaking(entry) {
             stop()
             return
@@ -48,16 +48,16 @@ final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesizerDelega
         stop()
         configureAudioSession()
 
-        speak(text: entry.text, entryID: entry.id, speakerName: entry.speakerName)
+        speak(text: entry.text, entryID: entry.id, speakerName: entry.speakerName, language: language)
     }
 
-    func speak(text: String, entryID: UUID? = nil, speakerName: String? = nil) {
+    func speak(text: String, entryID: UUID? = nil, speakerName: String? = nil, language: AppLanguage = .current) {
         stop()
         configureAudioSession()
 
         let profile = VoiceCatalog.profile(for: speakerName, preference: voicePreference)
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = VoiceCatalog.voice(for: profile)
+        utterance.voice = VoiceCatalog.voice(for: profile, language: language)
         utterance.rate = profile.rate
         utterance.pitchMultiplier = profile.pitch
         utterance.volume = 1.0
@@ -67,11 +67,11 @@ final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesizerDelega
         synthesizer.speak(utterance)
     }
 
-    func toggle(text: String, entryID: UUID? = nil, speakerName: String? = nil) {
+    func toggle(text: String, entryID: UUID? = nil, speakerName: String? = nil, language: AppLanguage = .current) {
         if entryID != nil, speakingEntryID == entryID {
             stop()
         } else {
-            speak(text: text, entryID: entryID, speakerName: speakerName)
+            speak(text: text, entryID: entryID, speakerName: speakerName, language: language)
         }
     }
 
@@ -145,9 +145,12 @@ private enum VoiceCatalog {
         return VoiceProfile(preferredNames: ["Alex", "Samantha", "Daniel"], pitch: 1.0, rate: 0.46)
     }
 
-    static func voice(for profile: VoiceProfile) -> AVSpeechSynthesisVoice? {
-        let voices = AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language.hasPrefix("en") }
+    static func voice(for profile: VoiceProfile, language: AppLanguage) -> AVSpeechSynthesisVoice? {
+        let availableVoices = AVSpeechSynthesisVoice.speechVoices()
+        let voices = availableVoices.filter { voice in
+            language.speechLanguageCodes.contains { voice.language.caseInsensitiveCompare($0) == .orderedSame } ||
+            voice.language.lowercased().hasPrefix(language.rawValue)
+        }
 
         for preferredName in profile.preferredNames {
             if let voice = voices.first(where: { $0.name.caseInsensitiveCompare(preferredName) == .orderedSame }) {
@@ -155,6 +158,8 @@ private enum VoiceCatalog {
             }
         }
 
-        return AVSpeechSynthesisVoice(language: "en-US") ?? voices.first
+        return language.speechLanguageCodes.lazy.compactMap(AVSpeechSynthesisVoice.init(language:)).first
+            ?? voices.first
+            ?? AVSpeechSynthesisVoice(language: "en-US")
     }
 }

@@ -10,7 +10,7 @@ public struct ContextBuilder: Sendable {
                        disposition: npc.disposition, knownFacts: npc.knownFacts,
                        memories: Array(npc.memories.sorted { $0.importance > $1.importance }.prefix(3)))
         }
-        return DMContext(location: location, player: state.player, nearbyNPCs: npcs,
+        return DMContext(language: state.language, location: location, player: state.player, nearbyNPCs: npcs,
                          activeQuest: state.activeQuest, relevantFacts: Array(state.discoveredFacts.suffix(8)),
                          recentConversation: Array(state.recentTurns.suffix(8)))
     }

@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 
 /// Languages shipped with the app. English is the final fallback for missing entries.
-public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
+public enum AppLanguage: String, Codable, CaseIterable, Identifiable, Sendable {
     case english = "en"
     case spanish = "es"
     case portuguese = "pt"
@@ -12,6 +12,28 @@ public enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
 
     public var id: String { rawValue }
     public var locale: Locale { Locale(identifier: rawValue) }
+
+    public var displayName: String {
+        switch self {
+        case .english: return "English"
+        case .spanish: return "Spanish"
+        case .portuguese: return "Portuguese"
+        case .french: return "French"
+        case .german: return "German"
+        case .italian: return "Italian"
+        }
+    }
+
+    public var speechLanguageCodes: [String] {
+        switch self {
+        case .english: return ["en-US", "en-GB"]
+        case .spanish: return ["es-MX", "es-ES", "es-US"]
+        case .portuguese: return ["pt-BR", "pt-PT"]
+        case .french: return ["fr-FR", "fr-CA"]
+        case .german: return ["de-DE"]
+        case .italian: return ["it-IT"]
+        }
+    }
 
     /// Resolves in Apple's normal order: per-app language setting, OS preference, English.
     public static var current: AppLanguage {
@@ -43,7 +65,11 @@ public enum AppLocalization {
               let bundle = Bundle(path: path) else {
             return Bundle.main.localizedString(forKey: key, value: key, table: "Localizable")
         }
-        return bundle.localizedString(forKey: key, value: key, table: "Localizable")
+        let localized = bundle.localizedString(forKey: key, value: key, table: "Localizable")
+        guard localized == key, language != .english,
+              let englishPath = Bundle.main.path(forResource: AppLanguage.english.rawValue, ofType: "lproj"),
+              let englishBundle = Bundle(path: englishPath) else { return localized }
+        return englishBundle.localizedString(forKey: key, value: key, table: "Localizable")
     }
 
     public static func format(_ key: String, language: AppLanguage, _ arguments: CVarArg...) -> String {

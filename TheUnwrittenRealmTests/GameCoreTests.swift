@@ -35,6 +35,23 @@ final class GameCoreTests: XCTestCase {
         XCTAssertEqual(campaign.player.maxHitPoints, 10)
     }
 
+    func testSpanishCampaignLocalizesContentAndRecognizesSpanishInvestigation() async throws {
+        let campaign = StarterCampaign.make(language: .spanish)
+        XCTAssertEqual(campaign.language, .spanish)
+
+        let context = ContextBuilder().build(for: campaign)
+        let action = try await FakeAIProvider().interpret(
+            command: PlayerCommand(rawText: "Miro alrededor buscando salidas"), context: context
+        )
+        XCTAssertEqual(action.intent, .investigate)
+
+        var state = campaign
+        var engine = GameTurnEngine(ai: FakeAIProvider(), random: SequenceRandomSource([20]))
+        let result = await engine.process(PlayerCommand(rawText: "Miro alrededor buscando salidas"), state: &state) { _ in }
+        XCTAssertNotNil(result.check)
+        XCTAssertFalse(result.narration.isEmpty)
+    }
+
     func testSkillCheckUsesInjectedRoll() {
         var state = StarterCampaign.make()
         var engine = RulesEngine()

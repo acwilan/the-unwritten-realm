@@ -38,7 +38,7 @@ public struct GameTurnEngine: Sendable {
         do {
             action = try await ai.interpret(command: command, context: context)
         } catch {
-            return GameTurnResult(narration: "I couldn't understand that attempt. Try describing what you want to do in a little more detail.", events: [], action: nil, check: nil, errorMessage: "Intent interpretation failed: \(error.localizedDescription)", diagnostics: nil)
+            return GameTurnResult(narration: AppLocalization.string("I couldn't understand that attempt. Try describing what you want to do in a little more detail.", language: state.language), events: [], action: nil, check: nil, errorMessage: "Intent interpretation failed: \(error.localizedDescription)", diagnostics: nil)
         }
         let resolution = rules.resolve(action, in: state, random: &random)
         for event in resolution.events { state.apply(event) }
@@ -51,9 +51,11 @@ public struct GameTurnEngine: Sendable {
         do {
             narration = try await ai.narrate(context: narrationContext)
         } catch {
-            narration = resolution.isValid ? "The world shifts around your choice. \(resolution.explanation)" : resolution.explanation
+            narration = resolution.isValid
+                ? AppLocalization.format("The world shifts around your choice. %@", language: state.language, resolution.explanation)
+                : resolution.explanation
         }
-        state.recentTurns.append(ConversationEntry(speaker: .narrator, text: narration, eventSummaries: resolution.events.map(\.summary)))
+        state.recentTurns.append(ConversationEntry(speaker: .narrator, text: narration, eventSummaries: resolution.events.map { $0.summary(in: state.language) }))
 
         if let targetID = resolution.targetNPCID, var npc = state.npcs[targetID], let candidates = try? await ai.extractMemories(context: narrationContext) {
             for candidate in candidates where candidate.importance >= 3 {
@@ -66,7 +68,7 @@ public struct GameTurnEngine: Sendable {
         do {
             try save(state)
         } catch {
-            return GameTurnResult(narration: narration, events: resolution.events, action: action, check: resolution.check, errorMessage: "The turn played, but the campaign could not be saved.", diagnostics: nil)
+            return GameTurnResult(narration: narration, events: resolution.events, action: action, check: resolution.check, errorMessage: AppLocalization.string("The turn played, but the campaign could not be saved.", language: state.language), diagnostics: nil)
         }
         let diagnostics = TurnDiagnostics(rawCommand: command.rawText, action: action, check: resolution.check,
                                           events: resolution.events, locationID: context.location.id,

@@ -42,6 +42,21 @@ public struct GameEvent: Codable, Identifiable, Equatable, Sendable {
         case .timeAdvanced: return "Time passed."
         }
     }
+
+    public func summary(in language: AppLanguage) -> String {
+        switch kind {
+        case .skillCheckResolved: return text ?? AppLocalization.string("A check was resolved.", language: language)
+        case .itemAdded: return AppLocalization.format("Gained %@.", language: language, text ?? AppLocalization.string("an item", language: language))
+        case .itemRemoved: return AppLocalization.format("Used %@.", language: language, text ?? AppLocalization.string("an item", language: language))
+        case .characterDamaged: return AppLocalization.format("Lost %@ hit points.", language: language, String(value ?? 0))
+        case .characterHealed: return AppLocalization.format("Recovered %@ hit points.", language: language, String(value ?? 0))
+        case .npcDispositionChanged: return text ?? AppLocalization.string("An NPC's attitude changed.", language: language)
+        case .locationChanged: return AppLocalization.format("Moved to %@.", language: language, text ?? AppLocalization.string("a new location", language: language))
+        case .factDiscovered: return AppLocalization.format("Discovered: %@", language: language, text ?? AppLocalization.string("a new fact", language: language))
+        case .questStateChanged: return text ?? AppLocalization.string("Quest progress changed.", language: language)
+        case .timeAdvanced: return AppLocalization.string("Time passed.", language: language)
+        }
+    }
 }
 
 public extension CampaignState {

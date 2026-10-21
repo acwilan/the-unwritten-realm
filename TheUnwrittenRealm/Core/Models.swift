@@ -317,10 +317,11 @@ public struct ConversationEntry: Codable, Identifiable, Equatable, Sendable {
 }
 
 public struct CampaignState: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
     public var schemaVersion: Int
     public var campaignID: UUID
     public var title: String
+    public var language: AppLanguage
     public var difficulty: CampaignDifficulty
     public var player: PlayerCharacter
     public var currentLocationID: String
@@ -334,7 +335,7 @@ public struct CampaignState: Codable, Equatable, Sendable {
     public var minutesElapsed: Int
 
     public init(schemaVersion: Int = CampaignState.currentSchemaVersion, campaignID: UUID = UUID(), title: String,
-                difficulty: CampaignDifficulty = .easy,
+                language: AppLanguage = .english, difficulty: CampaignDifficulty = .easy,
                 player: PlayerCharacter, currentLocationID: String, locations: [String: Location],
                 npcs: [String: NPC], quests: [String: Quest], discoveredFacts: [String] = [],
                 recentTurns: [ConversationEntry] = [], eventLog: [GameEvent] = [], turnNumber: Int = 0,
@@ -342,6 +343,7 @@ public struct CampaignState: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
         self.campaignID = campaignID
         self.title = title
+        self.language = language
         self.difficulty = difficulty
         self.player = player
         self.currentLocationID = currentLocationID
@@ -356,7 +358,7 @@ public struct CampaignState: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, campaignID, title, difficulty, player, currentLocationID, locations, npcs, quests
+        case schemaVersion, campaignID, title, language, difficulty, player, currentLocationID, locations, npcs, quests
         case discoveredFacts, recentTurns, eventLog, turnNumber, minutesElapsed
     }
 
@@ -365,6 +367,7 @@ public struct CampaignState: Codable, Equatable, Sendable {
         schemaVersion = max(try container.decode(Int.self, forKey: .schemaVersion), CampaignState.currentSchemaVersion)
         campaignID = try container.decode(UUID.self, forKey: .campaignID)
         title = try container.decode(String.self, forKey: .title)
+        language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? AppLanguage.current
         difficulty = try container.decodeIfPresent(CampaignDifficulty.self, forKey: .difficulty) ?? .easy
         player = try container.decode(PlayerCharacter.self, forKey: .player)
         currentLocationID = try container.decode(String.self, forKey: .currentLocationID)
